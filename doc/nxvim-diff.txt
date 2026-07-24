@@ -11,6 +11,7 @@ Table of Contents                               *nxvim-diff-table-of-contents*
 6. Configuration                                    |nxvim-diff-configuration|
 7. Conflict resolution                        |nxvim-diff-conflict-resolution|
 8. Performance                                        |nxvim-diff-performance|
+
 A Meld-style side-by-side (and 3-way) diff viewer for nxvim. It is a diff
 VIEWER you feed a diff to — not a git tool. The core renders and navigates a
 diff; where the two (or three) sides come from is the caller's business. It
