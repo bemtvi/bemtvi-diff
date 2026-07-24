@@ -53,9 +53,11 @@ nx.test.describe("nxvim-diff render", function()
     local s = await_ready()
     -- The two panes occupy two distinct windows.
     nx.test.expect(s.panes[1].view:winid() ~= s.panes[2].view:winid()).to_be(true)
-    -- …and ONLY those two — the new tab's initial empty window was dropped (:only),
-    -- so the diff tab is a clean 2-up split.
-    nx.test.expect(#nx.win.list()).to_be(2)
+    -- …and ONLY those two in the diff's own tab — the new tab's initial empty window
+    -- was dropped, so the diff tab is a clean 2-up split. Count the CURRENT tab's
+    -- windows (nx.tabpage.wins); nx.win.list spans every tab and would also count the
+    -- original tab's window we opened the diff from.
+    nx.test.expect(#nx.tabpage.wins()).to_be(2)
   end)
 
   nx.test.it("resolves `path` panes by reading the files (the files source path)", function()

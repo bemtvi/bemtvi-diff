@@ -48,8 +48,10 @@ nx.test.describe("nxvim-diff 3-way render", function()
     })
     local s = await_ready()
     nx.test.expect(#s.panes).to_be(3)
-    -- three distinct windows, and ONLY those three (the new tab's empty window dropped)
-    nx.test.expect(#nx.win.list()).to_be(3)
+    -- ONLY those three windows in the diff's own tab (the new tab's empty window was
+    -- dropped). Count the CURRENT tab's windows; nx.win.list spans every tab and would
+    -- also count the original tab's window we opened the diff from.
+    nx.test.expect(#nx.tabpage.wins()).to_be(3)
     -- every pane projected to the same height, aligned on the base rows
     nx.test.expect(pane_lines(s.panes[1])).to_be("a|B|c")
     nx.test.expect(pane_lines(s.panes[2])).to_be("a|b|c")
