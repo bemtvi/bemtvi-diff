@@ -50,32 +50,19 @@ function M.head_spec(ctx)
       error("this buffer has no file to diff", 0)
     end
 
-    -- The file's path RELATIVE TO THE REPO ROOT, the form `git show HEAD:<rel>` wants.
-    -- `--show-prefix` (run in the file's dir) is the repo-root→cwd path as git itself
-    -- resolves it, so prefixing the file's basename onto it sidesteps any string math
-    -- against an absolute path — and crucially survives a symlinked dir (e.g. macOS's
-    -- /var → /private/var, where `--show-toplevel` returns the real path while ctx.file
-    -- keeps the symlink, so a prefix-strip would fail and leave an absolute, unusable
-    -- `HEAD:/abs/path`). Empty prefix ⇒ the file sits at the repo root.
-    local pre = nx.await(nx.run({
-      cmd = "git",
-      args = { "rev-parse", "--show-prefix" },
-      cwd = ctx.cwd,
-    }))
-    if pre.code ~= 0 then
-      error("not a git repository", 0)
-    end
-    local prefix = M.to_lines(pre.stdout)[1] or ""
-    local rel = prefix .. (ctx.file:match("[^/]+$") or ctx.file)
-
-    local show = nx.await(nx.run({
-      cmd = "git",
-      args = { "show", "HEAD:" .. rel },
-      cwd = ctx.cwd,
-    }))
-    if show.code ~= 0 then
-      -- The usual cause is a new / untracked file (no version exists at HEAD); an empty
-      -- repo with no commits lands here too. Either way: there's no HEAD side to diff.
+    -- The file's HEAD blob via the native `nx.git.show` (replaces `git rev-parse
+    -- --show-prefix` + `git show HEAD:<rel>`). It discovers the repo from the file and
+    -- computes the repo-relative path ITSELF — symlink-safe (the reason the old code did
+    -- the `--show-prefix` dance), so the plugin no longer touches path math. A path
+    -- outside any repo rejects `ENOREPO`; a file with no HEAD version (new / untracked,
+    -- empty repo) rejects `ENOENT`. Both map to the same bare, position-free messages the
+    -- `:NxDiffGit` wrapper adds its single "nxvim-diff: " prefix to.
+    local rel = ctx.file:match("[^/]+$") or ctx.file
+    local ok, content = pcall(nx.await, nx.git.show(ctx.file, "HEAD"))
+    if not ok then
+      if type(content) == "table" and content.code == "ENOREPO" then
+        error("not a git repository", 0)
+      end
       error(("no HEAD version of %s"):format(rel), 0)
     end
 
@@ -83,7 +70,7 @@ function M.head_spec(ctx)
     return {
       title = ("git HEAD — %s"):format(rel),
       panes = {
-        { label = "HEAD", lines = M.to_lines(show.stdout), filetype = ft, readonly = true },
+        { label = "HEAD", lines = M.to_lines(content), filetype = ft, readonly = true },
         { label = "working tree", buf = ctx.bufnr, filetype = ft, readonly = false },
       },
     }
