@@ -13,8 +13,8 @@
 -- spec and calls open() to show it. ONLY TWO things are exposed as :commands, because
 -- everything else is better expressed in Lua than as command flags:
 --
---   :NxDiffGit        diff the current file's working tree against git HEAD
---   :NxDiffConflict   if the current file has conflict markers, open them as a 3-way
+--   :DiffGit        diff the current file's working tree against git HEAD
+--   :DiffConflict   if the current file has conflict markers, open them as a 3-way
 --
 -- Both are thin wrappers over the Lua API (git.head_spec → open, conflict.spec →
 -- open), so the bundled git/conflict support is itself just a client of open().
@@ -22,8 +22,8 @@
 -- Module map (one concern each):
 --   config.lua      defaults + validated merge
 --   diff.lua        the pure LCS line-diff engine (alignment + hunks + projection)
---   conflict.lua    pure conflict-marker parser → sides → spec (:NxDiffConflict)
---   git.lua         build a working-tree-vs-HEAD spec via nx.git (:NxDiffGit)
+--   conflict.lua    pure conflict-marker parser → sides → spec (:DiffConflict)
+--   git.lua         build a working-tree-vs-HEAD spec via nx.git (:DiffGit)
 --   highlights.lua  the Diff* palette (fallback-applied)
 --   view.lua        spec → panes: create views, lay out the split, paint fillers/tints
 --   nav.lua         hunk navigation (]c / [c) + scroll / cursor sync
@@ -123,7 +123,7 @@ function M.open(spec)
   end)
 end
 
--- git_head() — open the current file's working tree vs git HEAD. Backs :NxDiffGit, and
+-- git_head() — open the current file's working tree vs git HEAD. Backs :DiffGit, and
 -- callable from Lua. Builds the ctx the git module expects, awaits its spec, opens.
 --
 -- `cwd` is the FILE's directory, not the editor's working directory: git must run inside
@@ -173,7 +173,7 @@ end
 
 -- conflict() — if the current buffer has git conflict markers, open the WHOLE file as a
 -- 3-way (diff3 style) or 2-way (plain merge style) diff, with every conflict shown in
--- context. Backs :NxDiffConflict. A clean file just notifies.
+-- context. Backs :DiffConflict. A clean file just notifies.
 --
 -- A cheap `nx.buf.search` for the start marker answers "is there a conflict?" before the
 -- whole buffer is read (a clean file pays nothing); `conflict_spec` above does the rest.
@@ -214,8 +214,8 @@ end
 -- refresh() — re-run the session's originating source and re-render.
 --
 -- A spec may carry `reload`, a function returning a fresh spec (or a promise of one);
--- that is how a source stays live — `:NxDiffGit` re-reads the blob at HEAD, and
--- `:NxDiffConflict` re-parses the buffer's markers. Without one there is nothing to
+-- that is how a source stays live — `:DiffGit` re-reads the blob at HEAD, and
+-- `:DiffConflict` re-parses the buffer's markers. Without one there is nothing to
 -- re-run, so the same spec is re-rendered: `buf` and `path` panes re-read their content,
 -- while a literal `lines` pane is by definition already all there is.
 function M.refresh()
@@ -270,11 +270,11 @@ function M.setup(opts)
     session.config = M.config
   end
 
-  nx.command("NxDiffGit", function()
+  nx.command("DiffGit", function()
     M.git_head()
   end, { desc = "Diff the current file's working tree against git HEAD" })
 
-  nx.command("NxDiffConflict", function()
+  nx.command("DiffConflict", function()
     M.conflict()
   end, { desc = "Open the current file's git conflict markers as a 3-way diff" })
 

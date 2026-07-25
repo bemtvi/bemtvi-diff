@@ -43,8 +43,8 @@ nx.plugins({
 Two commands, by design:
 
 ```
-:NxDiffGit        diff the current file's working tree against git HEAD
-:NxDiffConflict   if the current file has conflict markers, open them as a 3-way diff
+:DiffGit        diff the current file's working tree against git HEAD
+:DiffConflict   if the current file has conflict markers, open them as a 3-way diff
 ```
 
 Everything else is the Lua API — `require("nxvim-diff").open({ panes = {...} })` renders
@@ -65,7 +65,7 @@ A Lua test suite (`test/*_spec.lua`) runs on nxvim's native `nx.test` framework 
 specs for the LCS diff engine (including its no-freeze cell caps), the conflict-marker
 parser, config/spec validation, and hunk navigation; live specs driving real 2- and 3-pane
 diffs, pane layout and focus, scroll/cursor sync, the line tints + `DiffText` spans,
-conflict resolution, and `:NxDiffGit`:
+conflict resolution, and `:DiffGit`:
 
 ```sh
 nxvim --test-plugin .

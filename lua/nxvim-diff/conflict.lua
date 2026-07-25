@@ -1,5 +1,5 @@
 -- nxvim-diff.conflict — parse git conflict markers out of a file into the two/three
--- sides, and build a diff spec from them (the `:NxDiffConflict` backing).
+-- sides, and build a diff spec from them (the `:DiffConflict` backing).
 --
 -- Pure (no editor calls), so it is fully unit-tested. It reconstructs each FULL side
 -- of the file (not just the conflicting hunks) so the resulting diff shows the

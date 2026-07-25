@@ -1,4 +1,4 @@
--- Live :NxDiffGit test (Phase 5): exercises the git source end to end — a real init'd
+-- Live :DiffGit test (Phase 5): exercises the git source end to end — a real init'd
 -- repo (HEAD read), plus the not-a-repo / nameless / not-in-HEAD error paths — and
 -- asserts the notifications read cleanly (one "nxvim-diff: " prefix, no Lua position
 -- noise). The not-a-repo case doubles as the regression test for the fix that runs git

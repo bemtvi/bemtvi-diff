@@ -32,18 +32,18 @@ expressed in Lua than as a pile of command flags.
 # Commands
 
 ```
-:NxDiffGit       Diff the current file's working tree vs git HEAD.
-:NxDiffConflict  Open this file's git conflict markers as a diff.
+:DiffGit       Diff the current file's working tree vs git HEAD.
+:DiffConflict  Open this file's git conflict markers as a diff.
 ```
 
-`:NxDiffGit` diffs the current file against its git HEAD. Git runs in the FILE's own directory (not
+`:DiffGit` diffs the current file against its git HEAD. Git runs in the FILE's own directory (not
 the editor cwd), so a file edited from outside `:pwd` diffs against its own repo. It fails loud with
 a clean message — "not a git repository", "this buffer has no file to diff", or "no HEAD version of
 `<file>`" (a new / untracked file). Richer comparisons (an arbitrary rev, the index, `rev..rev`) are
 intentionally Lua, not flags: build a spec with `require("nxvim-diff.git").to_lines(...)` and call
 `open()` (see The Lua API).
 
-`:NxDiffConflict` — if the current buffer has git conflict markers, open them as a diff. A
+`:DiffConflict` — if the current buffer has git conflict markers, open them as a diff. A
 diff3-style conflict (with a `|||||||` base section, from `merge.conflictStyle=diff3`/`zdiff3`)
 opens as a 3-way ours | base | theirs; a plain-merge conflict opens 2-way ours/theirs. Each side is
 the FULL file with its section substituted, so the conflict shows in its surrounding context. A
@@ -73,7 +73,7 @@ q    Close the diff, restoring the prior layout.
 ```
 
 Hunk motions wrap around (past the last hunk → the first, and vice versa). The conflict maps
-(`co` / `ct` / `cb` / `cp` / `ca` / `cx`) only do something on a `:NxDiffConflict` diff — see
+(`co` / `ct` / `cb` / `cp` / `ca` / `cx`) only do something on a `:DiffConflict` diff — see
 Conflict resolution.
 
 # Three-way layout
@@ -85,16 +85,16 @@ deleted shows as a blank opposite the base. The outer panes carry intra-line `Di
 (computed against the base line); the base pane keeps a whole-line tint.
 
 Any 3-pane spec passed to `open()` is treated this way — the middle pane is the base.
-`:NxDiffConflict` builds exactly such a spec from a diff3 conflict.
+`:DiffConflict` builds exactly such a spec from a diff3 conflict.
 
 # The Lua API
 
 - `require("nxvim-diff").open({spec})` — THE generic entry point ("send a diff for preview"). Any
   plugin (git, LSP rename, formatter, …) builds a `{spec}` and calls this. Validates the spec (fails
   loud), closes any live session, and renders.
-- `require("nxvim-diff").git_head()` — open the current file vs git HEAD (what `:NxDiffGit` calls).
+- `require("nxvim-diff").git_head()` — open the current file vs git HEAD (what `:DiffGit` calls).
 - `require("nxvim-diff").conflict()` — parse this buffer's conflict markers and open them (what
-  `:NxDiffConflict` calls).
+  `:DiffConflict` calls).
 - `require("nxvim-diff").close()` — tear down the active diff, restoring the prior layout.
 - `require("nxvim-diff").refresh()` — re-run the active session's source and re-render (`R`).
 - `require("nxvim-diff").session()` — the live session handle (or `nil`), for add-ons and tests.
@@ -124,7 +124,7 @@ displayed name (what the statusline and tab label show); `title` names the diff 
 carried on the session for add-ons and `on_attach` rather than painted anywhere.
 
 `reload` is what makes `refresh` (`R`) meaningful: it re-runs the source and re-renders the result,
-so `:NxDiffGit` re-reads the blob at HEAD and `:NxDiffConflict` re-parses the buffer's markers.
+so `:DiffGit` re-reads the blob at HEAD and `:DiffConflict` re-parses the buffer's markers.
 Without one there is nothing to re-run, so the same spec is simply re-rendered — `buf` and `path`
 panes re-read their content, while a literal `lines` pane is by definition already all there is.
 
@@ -220,7 +220,7 @@ row blank. Both ride core extmark decorations (`sign_text` / `line_fill`).
 
 # Conflict resolution
 
-`:NxDiffConflict` opens the WHOLE file as a 3-way (or 2-way) diff with every conflict shown in
+`:DiffConflict` opens the WHOLE file as a 3-way (or 2-way) diff with every conflict shown in
 context — the reconstructed ours/base/theirs sides differ only where the conflicts are, so
 `]c` / `[c` step from one to the next.
 

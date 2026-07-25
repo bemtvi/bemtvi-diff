@@ -1,5 +1,5 @@
 -- nxvim-diff.git — build a spec comparing the current file's working tree against its
--- git HEAD (the `:NxDiffGit` backing). Deliberately minimal: HEAD only. Anything
+-- git HEAD (the `:DiffGit` backing). Deliberately minimal: HEAD only. Anything
 -- fancier (an arbitrary revision, the index, rev..rev) is left to a caller building
 -- its own spec and calling `require("nxvim-diff").open(spec)` directly — the Lua API
 -- is the extension point, not a pile of command flags.
@@ -37,7 +37,7 @@ end
 -- (read-only), the live working-tree buffer on the right (editable). `ctx` =
 -- { file = <abs path>, bufnr = <n>, cwd = <file's dir> } (the shape init.lua builds).
 --
--- Failures reject with a bare, position-free message (`error(msg, 0)`): the `:NxDiffGit`
+-- Failures reject with a bare, position-free message (`error(msg, 0)`): the `:DiffGit`
 -- path's `run` wrapper adds the single "nxvim-diff: " prefix and notifies, so prefixing
 -- here too (or letting Lua tack on a "git.lua:NN:" prefix) would double up.
 function M.head_spec(ctx)
@@ -52,7 +52,7 @@ function M.head_spec(ctx)
     -- the `--show-prefix` dance), so the plugin no longer touches path math. A path
     -- outside any repo rejects `ENOREPO`; a file with no HEAD version (new / untracked,
     -- empty repo) rejects `ENOENT`. Both map to the same bare, position-free messages the
-    -- `:NxDiffGit` wrapper adds its single "nxvim-diff: " prefix to.
+    -- `:DiffGit` wrapper adds its single "nxvim-diff: " prefix to.
     local rel = ctx.file:match("[^/]+$") or ctx.file
     local ok, content = pcall(nx.await, nx.git.show(ctx.file, "HEAD"))
     if not ok then

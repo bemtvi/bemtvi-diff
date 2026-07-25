@@ -368,7 +368,7 @@ function M.open(root, spec)
     -- pick/clear independently of the static diff decorations in `ns`.
     pick_ns = nx.ns.create("nxvim-diff-picks"),
     panes = panes,
-    -- The conflict write-back target (only a `:NxDiffConflict` spec carries it); the
+    -- The conflict write-back target (only a `:DiffConflict` spec carries it); the
     -- `choose_*` actions read it. Absent on a plain (non-conflict) diff.
     resolve = spec.resolve,
     _ready = false,

@@ -74,7 +74,7 @@ function M.refresh(session)
   end
 end
 
--- ===== conflict resolution (:NxDiffConflict sessions only) ==================
+-- ===== conflict resolution (:DiffConflict sessions only) ==================
 --
 -- The resolve actions all write a chosen set of lines back over the conflict's marker
 -- block in the live buffer and close the diff: `choose_ours`/`choose_theirs` pick one
