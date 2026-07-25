@@ -63,8 +63,25 @@ nx.test.describe("nxvim-diff git", function()
     nx.test.expect(#spec.panes).to_be(2)
     nx.test.expect(spec.panes[1].label).to_be("HEAD")
     nx.test.expect(table.concat(spec.panes[1].lines, "|")).to_be("one|two")
-    nx.test.expect(spec.panes[1].readonly).to_be(true)
     nx.test.expect(spec.panes[2].buf).to_be(t:buf()) -- the live working-tree buffer
+    -- The spec carries its own re-run hook, so `refresh` (`R`) re-reads the blob at HEAD
+    -- instead of re-rendering the snapshot the diff was opened with.
+    nx.test.expect(type(spec.reload)).to_be("function")
+  end)
+
+  nx.test.it("the reload hook re-reads HEAD after a new commit", function(t)
+    local dir = nx.test.tempdir()
+    repo_with_commit(dir)
+    local ctx = { file = dir .. "/a.txt", bufnr = t:buf(), cwd = dir }
+    local spec = nx.await(gitmod.head_spec(ctx))
+    nx.test.expect(table.concat(spec.panes[1].lines, "|")).to_be("one|two")
+
+    -- Move HEAD on. Re-running the hook must show the NEW blob — the whole point of
+    -- refresh being a re-run of the source rather than a re-render of the same lines.
+    nx.await(nx.fs.write(dir .. "/a.txt", "one\ntwo\nthree\n"))
+    git(dir, "commit", "-q", "-am", "second")
+    local again = nx.await(spec.reload())
+    nx.test.expect(table.concat(again.panes[1].lines, "|")).to_be("one|two|three")
   end)
 
   nx.test.it("a file outside any git repo reports 'not a git repository'", function(t)

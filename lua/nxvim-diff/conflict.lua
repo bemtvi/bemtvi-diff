@@ -78,6 +78,12 @@ function M.parse(lines)
         base[#base + 1] = line
         theirs[#theirs + 1] = line
       end
+    elseif is_start then
+      -- A second `<<<<<<<` before the current block closed: git never writes nested
+      -- conflicts, so this is a hand-mangled or half-resolved file. Swallowing it as
+      -- content would silently produce sides that don't match the markers, and the
+      -- resolve actions would then write those wrong lines back over the file.
+      error(("nxvim-diff: malformed conflict (nested <<<<<<< at line %d)"):format(i))
     elseif mode == "ours" then
       if is_base then
         mode, diff3 = "base", true
@@ -149,21 +155,17 @@ function M.spec(lines, name, filetype)
   end
   local ours_label = (p.ours_label and p.ours_label ~= "" and p.ours_label) or "ours"
   local theirs_label = (p.theirs_label and p.theirs_label ~= "" and p.theirs_label) or "theirs"
-  local panes = {
-    { label = ours_label, lines = p.ours, filetype = filetype, readonly = true },
-  }
+  local panes = { { label = ours_label, lines = p.ours, filetype = filetype } }
   if p.base then
-    panes[#panes + 1] = { label = "base", lines = p.base, filetype = filetype, readonly = true }
+    panes[#panes + 1] = { label = "base", lines = p.base, filetype = filetype }
   end
-  panes[#panes + 1] =
-    { label = theirs_label, lines = p.theirs, filetype = filetype, readonly = true }
+  panes[#panes + 1] = { label = theirs_label, lines = p.theirs, filetype = filetype }
   return {
     title = ("conflict — %s%s"):format(name or "", p.base and " (3-way)" or " (2-way)"),
     panes = panes,
-    is_conflict = true,
     -- The write-back map for `choose_ours` / `choose_theirs` (Phase 6). `regions` carries
-    -- block-relative 1-based line ranges (relative to `lines`); the caller that knows the
-    -- live buffer (`init.conflict`) rebases them to absolute buffer lines and sets `buf`.
+    -- 1-based line ranges into `lines`; the caller that knows the live buffer
+    -- (`init.conflict`) sets `buf` so the resolve actions can write back.
     resolve = { regions = p.regions, diff3 = p.diff3 },
   }
 end

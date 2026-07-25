@@ -39,7 +39,7 @@ expressed in Lua than as a pile of command flags.
 `:NxDiffGit` diffs the current file against its git HEAD. Git runs in the FILE's own directory (not
 the editor cwd), so a file edited from outside `:pwd` diffs against its own repo. It fails loud with
 a clean message — "not a git repository", "this buffer has no file to diff", or "no HEAD version of
-<file>" (a new / untracked file). Richer comparisons (an arbitrary rev, the index, `rev..rev`) are
+`<file>`" (a new / untracked file). Richer comparisons (an arbitrary rev, the index, `rev..rev`) are
 intentionally Lua, not flags: build a spec with `require("nxvim-diff.git").to_lines(...)` and call
 `open()` (see The Lua API).
 
@@ -57,7 +57,8 @@ rebindable, see Configuration):
 
 ```
 ]c   Jump to the next changed hunk.
-[c   Jump to the previous changed hunk.
+[c   Jump to the previous changed hunk (its FIRST line — so from inside a
+     multi-line hunk it walks to that hunk's start, like vim's [c).
 ]C   Jump to the last hunk.
 [C   Jump to the first hunk.
 co   Resolve the conflict to OURS (conflict diffs only).
@@ -66,7 +67,8 @@ cb   Resolve the conflict to BOTH (ours then theirs).
 cp   Stage the selected line(s) from this pane (normal or visual mode).
 ca   Apply the staged lines as the resolution.
 cx   Clear the staged lines.
-R    Refresh — re-run the source and re-render.
+R    Refresh — re-run the source and re-render (re-reads HEAD / re-parses
+     the conflicted buffer; see The Lua API).
 q    Close the diff, restoring the prior layout.
 ```
 
@@ -94,47 +96,74 @@ Any 3-pane spec passed to `open()` is treated this way — the middle pane is th
 - `require("nxvim-diff").conflict()` — parse this buffer's conflict markers and open them (what
   `:NxDiffConflict` calls).
 - `require("nxvim-diff").close()` — tear down the active diff, restoring the prior layout.
-- `require("nxvim-diff").refresh()` — re-run the active session's source and re-render.
+- `require("nxvim-diff").refresh()` — re-run the active session's source and re-render (`R`).
 - `require("nxvim-diff").session()` — the live session handle (or `nil`), for add-ons and tests.
 
 A `{spec}` is:
 
 ```lua
 {
-  title = <string?>,
-  panes = { <pane>, <pane> [, <pane>] },  -- 2 or 3
+  title  = <string?>,   -- a name for this diff, kept on the session handle
+  reload = <function?>, -- re-run the source: () -> spec | promise-of-spec
+  panes  = { <pane>, <pane> [, <pane>] },  -- 2 or 3
 }
 ```
 
 Each `<pane>` carries EXACTLY ONE content source — `lines` (an array of strings), `buf` (a bufnr),
-or `path` (an absolute path) — plus optional `label`, `filetype`, and `readonly` (default `true`):
+or `path` (an absolute path) — plus optional `label` and `filetype`:
 
 ```lua
 { label = "HEAD", lines = {...}, filetype = "rust" }
-{ label = "working", buf = 0, readonly = false }
+{ label = "working", buf = 0 }
 { label = "disk", path = "/abs/file" }
 ```
+
+Every pane renders as a read-only `nx.view` snapshot of its content: this is a viewer, not an
+editing surface, so there is no per-pane writability to ask for. `label` becomes the pane's
+displayed name (what the statusline and tab label show); `title` names the diff as a whole and is
+carried on the session for add-ons and `on_attach` rather than painted anywhere.
+
+`reload` is what makes `refresh` (`R`) meaningful: it re-runs the source and re-renders the result,
+so `:NxDiffGit` re-reads the blob at HEAD and `:NxDiffConflict` re-parses the buffer's markers.
+Without one there is nothing to re-run, so the same spec is simply re-rendered — `buf` and `path`
+panes re-read their content, while a literal `lines` pane is by definition already all there is.
 
 In a 3-pane spec the middle pane is the base (see Three-way layout).
 
 # Extending
 
 Because `open()` takes any spec, a one-screen plugin can preview a diff. A formatter preview — this
-buffer vs its formatted output:
+buffer vs its formatted output. Running the formatter is async (`nx.run`): nxvim has no blocking
+shell-out, and a subprocess on the editor thread would freeze the UI anyway.
 
 ```lua
-vim.keymap.set("n", "<leader>fp", function()
-  local src = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-  local out = vim.fn.systemlist("prettier --stdin-filepath " .. vim.fn.expand("%"), src)
-  require("nxvim-diff").open({
-    title = "format preview",
-    panes = {
-      { label = "buffer",    lines = src, filetype = vim.bo.filetype },
-      { label = "formatted", lines = out, filetype = vim.bo.filetype },
-    },
-  })
+nx.keymap.set("n", "<leader>fp", function()
+  local src = nx.buf.lines(0, 0, -1)
+  local ft, name = nx.bo[0].filetype, nx.buf.name(0)
+  nx.async(function()
+    local r = nx.await(nx.run({
+      cmd = "prettier",
+      args = { "--stdin-filepath", name },
+      stdin = table.concat(src, "\n"),
+    }))
+    if r.code ~= 0 then
+      return nx.notify("prettier: " .. r.stderr, 4)
+    end
+    local out = require("nxvim-diff.diff").to_lines(r.stdout)
+    require("nxvim-diff").open({
+      title = "format preview",
+      panes = {
+        { label = "buffer", lines = src, filetype = ft },
+        { label = "formatted", lines = out, filetype = ft },
+      },
+    })
+  end)()
 end, { desc = "preview formatting as a diff" })
 ```
+
+`require("nxvim-diff.diff").to_lines(text)` is the splitter every built-in source uses to turn a
+blob into pane `lines` (it drops the empty a trailing newline would otherwise produce, and nothing
+else) — reuse it so your pane agrees with the others about trailing newlines.
 
 The bundled git and conflict support are themselves just clients of `open()` — see `git.lua` /
 `conflict.lua` for fuller examples.
@@ -151,12 +180,19 @@ require("nxvim-diff").setup({
   inline = true,        -- tint changed spans within a line (DiffText)
   signs = false,        -- per-hunk gutter signs +/~/- (opt-in)
   fillchar = "-",       -- glyph painted across a blank filler row ("" leaves it blank)
-  layout = "auto",      -- "auto" | "vertical" | "horizontal"
+  layout = "auto",      -- "auto" | "vertical" (side by side) | "horizontal" (stacked)
   keymaps = { ... },    -- key -> action; false disables a key
   highlights = { ... }, -- Diff* / NxDiff* group overrides
   on_attach = nil,      -- fn(session, api, bufnr) per pane buffer
 })
 ```
+
+Every value is validated on `setup()` and an out-of-domain one fails loud — an unknown `layout`, a
+non-boolean flag, an action name that isn't a built-in, an `on_attach` that isn't a function.
+
+`layout = "horizontal"` stacks the panes (each full width, one above the next) instead of putting
+them side by side; `"auto"` resolves to vertical at both supported pane counts, since 2 and 3 panes
+each read best in columns.
 
 `keymaps` is a `key -> action` table merged key-by-key (so you override one binding without
 redeclaring all). An action is a built-in name (`next_hunk`, `prev_hunk`, `first_hunk`, `last_hunk`,
@@ -167,7 +203,14 @@ normal-mode.
 
 Highlights use the canonical `DiffAdd` / `DiffDelete` / `DiffChange` / `DiffText` groups, so a
 ported colorscheme themes the viewer unmodified; only a fallback is installed when a group is
-undefined. Plugin-private extras (filler, sign, label colours) live under the `NxDiff*` namespace.
+undefined. Plugin-private extras (the filler rule, the sign glyphs, the picked-line tint) live
+under the `NxDiff*` namespace.
+
+The three line groups are painted as the editor's full-width line background — the whole changed
+row is tinted to the window edge, vim's diff look, and an added or changed line that happens to be
+EMPTY still shows. Their `bg` is therefore the attribute that matters: a theme giving `DiffAdd`
+only a foreground tints nothing. `DiffText` is an ordinary text span over the changed characters,
+so its `fg` / `bold` apply as usual and it composes on top of the line background.
 
 `signs` puts a `+` / `~` / `-` gutter sign on each added / changed / deleted line (opt-in; off by
 default since the tint + `DiffText` already convey a change). When on, every pane reserves the sign
@@ -214,8 +257,20 @@ Picks are per-conflict and last only for the current diff session.
 
 # Performance
 
-The line diff is an LCS with two guards so it never freezes the editor: shared leading/trailing
-lines are trimmed before the O(n·m) table runs (so a few edits in a big file stay cheap and get the
-exact alignment), and a still-huge, highly-divergent middle falls back to a coarse block-replace
-(`diff.LCS_CELL_LIMIT`) rather than allocating an enormous table — correct (every line is shown),
-just not the minimal-edit alignment.
+The editor must never freeze on a diff, so both LCS passes — the line diff and the per-line
+character diff behind `inline` — are bounded the same way: trim, then cap.
+
+The LINE diff trims the shared leading/trailing lines before the O(n·m) table runs (a few edits in a
+big file stay cheap and still get the exact alignment), and a still-huge, highly-divergent middle
+falls back to a coarse block-replace past `diff.LCS_CELL_LIMIT` rather than allocating an enormous
+table — correct (every line is shown), just not the minimal-edit alignment.
+
+The INTRA-LINE diff gets the same treatment per changed row, against `diff.INLINE_CELL_LIMIT`
+(lower, because it runs once per changed row rather than once per diff): shared leading/trailing
+characters are trimmed, and a middle still over the cap degrades to one span per side instead of a
+per-character alignment. "Lines are short" is not a safe assumption — a minified bundle or a base64
+blob is a single line tens of thousands of characters wide, and an uncapped character LCS over two
+of those is billions of cells.
+
+The DP table itself is one flat array rather than a table of tables, which is what keeps those caps
+a workable ceiling instead of a memory cliff.

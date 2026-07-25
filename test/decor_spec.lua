@@ -49,12 +49,31 @@ nx.test.describe("nxvim-diff decorations", function()
 
   nx.test.it("tints the whole changed line with DiffChange", function()
     local s = open_change()
+    -- The tint is a full-width `line_hl_group` line background (vim's diff look), not a
+    -- col..end_col span over the text.
     local tint = marks_where(s.panes[1], s, 1, function(d)
-      return d.hl_group == "DiffChange"
+      return d.line_hl_group == "DiffChange"
     end)
     nx.test.expect(#tint).to_be(1)
-    nx.test.expect(tint[1][3]).to_be(0) -- starts at col 0
-    nx.test.expect(tint[1][4].end_col).to_be(5) -- spans all of "foo()"
+    nx.test.expect(tint[1][3]).to_be(0) -- anchored at col 0
+  end)
+
+  nx.test.it("tints a changed line that is EMPTY (a range mark could not)", function()
+    -- The regression guard for the old col..end_col tint: an added blank line has no text
+    -- to span, so `end_col` was 0 — a zero-width mark that painted nothing, leaving a real
+    -- insertion invisible. A line background has no such hole.
+    diff.open({
+      panes = {
+        { label = "old", lines = { "a", "b" } },
+        { label = "new", lines = { "a", "", "b" } },
+      },
+    })
+    local s = await_ready()
+    nx.test.expect(nx.buf.lines(s.panes[2].view:bufnr(), 1, 2)[1]).to_be("") -- row 1 is blank
+    local tint = marks_where(s.panes[2], s, 1, function(d)
+      return d.line_hl_group == "DiffAdd"
+    end)
+    nx.test.expect(#tint).to_be(1)
   end)
 
   nx.test.it("paints DiffText over only the changed characters", function()
@@ -80,7 +99,7 @@ nx.test.describe("nxvim-diff decorations", function()
     nx.test.expect(#text).to_be(0)
     -- The whole-line tint is unaffected.
     local tint = marks_where(s.panes[1], s, 1, function(d)
-      return d.hl_group == "DiffChange"
+      return d.line_hl_group == "DiffChange"
     end)
     nx.test.expect(#tint).to_be(1)
   end)

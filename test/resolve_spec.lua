@@ -65,6 +65,26 @@ nx.test.describe("nxvim-diff conflict resolve", function()
     nx.test.expect(table.concat(r.theirs, "|")).to_be("their change")
   end)
 
+  nx.test.it("refresh re-parses the live buffer, not the opening snapshot", function(t)
+    local _, bufnr = open_conflict(t)
+    diff.conflict()
+    local s = await_ready()
+    nx.test.expect(type(s.spec.reload)).to_be("function")
+
+    -- Edit the conflicted buffer behind the diff, then refresh: the panes must show the
+    -- NEW content. `refresh` used to re-render the very spec it was opened with, so an
+    -- edit made elsewhere stayed invisible however many times you pressed `R`.
+    nx.await(nx.buf.set_lines(bufnr, 2, 3, true, { "our EDITED change" }))
+    diff.refresh()
+    t:wait_for(function()
+      local live = diff.session()
+      return live and live._ready and live ~= s
+    end, { tries = 300, interval = 10, message = "refresh never produced a new session" })
+    nx.test
+      .expect(table.concat(nx.buf.lines(diff.session().panes[1].view:bufnr(), 0, -1), "|"))
+      .to_be("top|our EDITED change|bot")
+  end)
+
   nx.test.it("choose_ours replaces the marker block with our side", function(t)
     local _, bufnr = open_conflict(t)
     diff.conflict()

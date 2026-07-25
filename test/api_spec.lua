@@ -44,6 +44,14 @@ nx.test.describe("nxvim-diff.git helpers", function()
   nx.test.it("to_lines splits and drops the trailing newline's empty", function()
     nx.test.expect(table.concat(git.to_lines("a\nb\n"), "|")).to_be("a|b")
     nx.test.expect(#git.to_lines("")).to_be(0)
+    -- Without a trailing newline the last line is content, not an artifact…
+    nx.test.expect(table.concat(git.to_lines("a\nb"), "|")).to_be("a|b")
+    -- …and a file that genuinely ENDS in a blank line keeps it (only the final newline's
+    -- own empty is dropped).
+    nx.test.expect(table.concat(git.to_lines("a\n\n"), "|")).to_be("a|")
+    -- One splitter serves every content source (a git blob, a `path` pane's file read),
+    -- so a trailing newline can't mean "an extra blank line" on one side of a diff only.
+    nx.test.expect(git.to_lines).to_be(require("nxvim-diff.diff").to_lines)
   end)
 
   nx.test.it("repo_relative strips the toplevel prefix (with or without slash)", function()

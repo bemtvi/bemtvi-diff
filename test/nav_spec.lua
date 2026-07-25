@@ -51,6 +51,15 @@ nx.test.describe("nxvim-diff.nav", function()
     nx.test.expect(s.jumped).to_be(6)
   end)
 
+  nx.test.it("prev_hunk from inside a hunk lands on that hunk's own start", function()
+    -- Row 3 is the second line of the hunk spanning rows 2..3. vim's `[c` is "the previous
+    -- START of a change", so it goes to row 2 — it must not skip the hunk you are standing
+    -- in and jump past it (which, with only two hunks, meant wrapping to row 6).
+    local s = two_hunks(3)
+    nav.prev_hunk(s)
+    nx.test.expect(s.jumped).to_be(2)
+  end)
+
   nx.test.it("first_hunk / last_hunk jump to the ends of the list", function()
     local s = two_hunks(4)
     nav.first_hunk(s)

@@ -8,20 +8,21 @@
 -- outer two are center-anchored against it (see `build` / `diff.compute3`).
 --
 -- Layout is a fresh tab: pane A mounts with `{ tab = true }` (the view fills a new tab
--- page, no split, no leftover empty window — the core primitive added for this), and
--- the remaining panes `{ split = "vsplit" }` beside it. Both are *view-ops* (one queue,
--- drained in order), so the whole layout is one deterministic tick — no `nx.cmd`, no
--- `:only`. The view buffer/winid only exist a tick after the mount, so decoration waits
--- on `nx.wait_for(bufnr)`. Closing the tab-mounted pane closes the whole tab.
+-- page, no split, no leftover empty window — the core primitive added for this), and the
+-- remaining panes split beside (or, with `layout = "horizontal"`, below) it. Both are
+-- *view-ops* (one queue, drained in order), so the whole layout is one deterministic tick
+-- — no `nx.cmd`, no `:only`. The view buffer/winid only exist a tick after the mount, so
+-- decoration waits on `nx.wait_for(bufnr)`. Closing the tab-mounted pane closes the tab.
 --
 -- ===== the session handle (what open returns) =====
 --   session = {
---     config, spec, rows, hunks, ns,
+--     config, spec, title, rows, hunks, ns, pick_ns,
 --     resolve,                                  -- conflict write-back map (nil if none)
 --     panes = { { view, label, side = "a"|"b", proj, text }, ... },
 --     _ready,                                   -- true once panes are rendered
 --     goto_row  = function(self, row) end,      -- move every pane to alignment `row`
 --     cursor_row = function(self) -> row end,   -- the focused pane's alignment row
+--     render_picks = function(self) end,        -- repaint the staged-line decorations
 --     reopen = function() end,                  -- re-run the source & re-render
 --   }
 
@@ -34,6 +35,20 @@ local M = {}
 
 local SIDES = { "a", "b", "c" }
 
+-- Set one window-local option. Split out so each option can be pcall'd on its own (see
+-- `finish`) instead of one wrapping pcall skipping every option after a failure.
+local function set_wo(win, name, value)
+  vim.wo[win][name] = value
+end
+
+-- The split direction the extra panes mount with, from `config.layout`: "horizontal"
+-- stacks them (each pane full width, one above the next); "vertical" — and "auto", which
+-- resolves to vertical at every supported pane count, since 2 and 3 panes both read best
+-- side by side — puts them next to each other.
+local function split_for(layout)
+  return layout == "horizontal" and "split" or "vsplit"
+end
+
 -- Resolve a pane's content to a line array (may await for a `path` pane).
 local function resolve(pane)
   if pane.lines then
@@ -43,15 +58,7 @@ local function resolve(pane)
     return nx.buf.lines(pane.buf, 0, -1)
   end
   if pane.path then
-    local text = nx.await(nx.fs.read_text(pane.path))
-    local lines = {}
-    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
-      lines[#lines + 1] = line
-    end
-    if #lines > 0 and lines[#lines] == "" and text:sub(-1) == "\n" then
-      lines[#lines] = nil -- drop the empty produced by a trailing newline
-    end
-    return lines
+    return diff.to_lines(nx.await(nx.fs.read_text(pane.path)))
   end
   return {}
 end
@@ -68,7 +75,10 @@ end
 -- The extmark priorities: the whole-line tint sits under the intra-line DiffText spans
 -- so the changed characters stay visible on top of the changed-line background. The pick
 -- tint sits BETWEEN them — above the conflict's own change tint (so a staged line reads as
--- staged, not just changed) but still under the DiffText spans.
+-- staged, not just changed) but still under the DiffText spans. The line tint and the pick
+-- tint are both `line_hl_group` marks, and the core keeps only the HIGHEST-priority one
+-- per line, so the pick tint outranking the change tint is what makes a staged line read
+-- as staged.
 local LINE_PRIORITY = 100
 local PICK_PRIORITY = 150
 local TEXT_PRIORITY = 200
@@ -81,10 +91,10 @@ local SIGN_GLYPH = { add = "+", change = "~", del = "-" }
 local SIGN_HL = { add = "NxDiffSignAdd", change = "NxDiffSignChange", del = "NxDiffSignDelete" }
 
 -- The decoration drawn on a line the user has staged with `pick_lines` (see nav.lua): a
--- `▶` gutter sign plus an `NxDiffPick` background tint over the line's text. Both live in
--- their own namespace so they re-render on every pick/clear without touching the static
--- diff decorations, and outrank the per-hunk layers (the sign shows over `~`, the tint over
--- the conflict's change background).
+-- `▶` gutter sign plus an `NxDiffPick` line background. Both live in their own namespace so
+-- they re-render on every pick/clear without touching the static diff decorations, and
+-- outrank the per-hunk layers (the sign shows over `~`, the tint over the conflict's own
+-- change background).
 local PICK_GLYPH = "▶"
 
 -- Decoration marks for one pane (`config` gates the optional layers):
@@ -95,7 +105,15 @@ local PICK_GLYPH = "▶"
 --     via the core `sign_text` extmark decoration),
 --   * a `fillchar` rule across each blank filler row (`config.fillchar`, via the core
 --     `line_fill` extmark decoration) so the alignment gap reads as a gap, vim-style.
-local function pane_marks(proj, text, config)
+--
+-- The line tint is a `line_hl_group` mark (the core's full-width line-background layer,
+-- painted under the text like `'cursorline'`), NOT a `col..end_col` range over the text.
+-- Both because that's what vim's diff mode looks like — the tint runs to the window edge,
+-- so a deletion filler and a genuinely-added blank line are distinguishable — and because
+-- a range mark can't paint an EMPTY line at all: `end_col` would be 0, a zero-width span,
+-- so an added/changed blank line used to show no tint whatsoever. The `DiffText` spans
+-- stay text-level ranges and compose on top of the background.
+local function pane_marks(proj, config)
   local marks = {}
   for i, e in ipairs(proj) do
     local line0 = i - 1
@@ -115,9 +133,7 @@ local function pane_marks(proj, text, config)
         marks[#marks + 1] = {
           line = line0,
           col = 0,
-          end_row = line0,
-          end_col = #(text[i] or ""),
-          hl_group = hl,
+          line_hl_group = hl,
           priority = LINE_PRIORITY,
         }
       end
@@ -162,26 +178,27 @@ local function finish(session, api)
   end, { tries = 200, interval = 5, message = "nxvim-diff: panes never mounted" })
     :next(function()
       for _, p in ipairs(session.panes) do
-        p.view:set_decor(session.ns, pane_marks(p.proj, p.text, session.config))
+        p.view:set_decor(session.ns, pane_marks(p.proj, session.config))
         local win = p.view:winid()
-        pcall(function()
-          if not session.config.wrap then
-            vim.wo[win].wrap = false
-          end
-          -- Reserve the sign column on EVERY pane (not just ones that have a sign) so the
-          -- panes stay the same width and their lines keep lining up — when hunk signs are
-          -- on, or always on a conflict diff, where `pick_lines` draws a pick sign on any
-          -- pane and the column must already be there so the first pick doesn't reflow.
-          if session.config.signs or session.resolve then
-            vim.wo[win].signcolumn = "yes"
-          end
-          -- Only the focused pane can animate a scroll; a synced (non-focused) pane is
-          -- moved with a crisp `set_topline`, so it would jump while the focused pane
-          -- slides — a visible desync. Disable scroll animation on every diff pane so
-          -- they move in lockstep. (Per-window override; the global `'scrollanim'` and
-          -- other windows are untouched, and it's restored when the view's window goes.)
-          vim.wo[win].scrollanim = false
-        end)
+        -- One pcall PER option: they are independent, so a failure to set one must not
+        -- skip the rest (a single wrapping pcall silently dropped `scrollanim` — the one
+        -- that actually keeps the panes from desyncing — if `wrap` had raised first).
+        if not session.config.wrap then
+          pcall(set_wo, win, "wrap", false)
+        end
+        -- Reserve the sign column on EVERY pane (not just ones that have a sign) so the
+        -- panes stay the same width and their lines keep lining up — when hunk signs are
+        -- on, or always on a conflict diff, where `pick_lines` draws a pick sign on any
+        -- pane and the column must already be there so the first pick doesn't reflow.
+        if session.config.signs or session.resolve then
+          pcall(set_wo, win, "signcolumn", "yes")
+        end
+        -- Only the focused pane can animate a scroll; a synced (non-focused) pane is
+        -- moved with a crisp `set_topline`, so it would jump while the focused pane
+        -- slides — a visible desync. Disable scroll animation on every diff pane so
+        -- they move in lockstep. (Per-window override; the global `'scrollanim'` and
+        -- other windows are untouched, and it's restored when the view's window goes.)
+        pcall(set_wo, win, "scrollanim", false)
         if type(session.config.on_attach) == "function" then
           pcall(session.config.on_attach, session, api, p.view:bufnr())
         end
@@ -250,10 +267,16 @@ end
 -- side's span. The union's min/max over every side is the region's `{ first, last }` row
 -- range (regions are disjoint and ordered, so the ranges don't overlap). Only a conflict
 -- spec carries `resolve`; a plain diff is a no-op here.
+--
+-- Linear, not quadratic: rather than re-scanning every alignment row once per region
+-- (regions × panes × rows — a heavily-conflicted file times a long file), each side builds
+-- a reconstructed-line → region lookup ONCE (the regions are disjoint, so a line has at
+-- most one owner) and then walks its rows a single time.
 local function attach_region_rows(resolve, projs)
   if not (resolve and resolve.regions) then
     return
   end
+  local regions = resolve.regions
   -- Which projection (by pane index) carries which reconstructed side. A 3-pane diff is
   -- ours | base | theirs; a 2-pane (plain merge) is ours | theirs.
   local roles = #projs == 3
@@ -263,20 +286,32 @@ local function attach_region_rows(resolve, projs)
         { proj = projs[3], key = "theirs" },
       }
     or { { proj = projs[1], key = "ours" }, { proj = projs[2], key = "theirs" } }
-  for _, region in ipairs(resolve.regions) do
-    local lo, hi
-    for _, role in ipairs(roles) do
+  for _, region in ipairs(regions) do
+    region.rows = nil -- a re-render must not union onto a previous layout's ranges
+  end
+  for _, role in ipairs(roles) do
+    local owner = {}
+    for ri, region in ipairs(regions) do
       local span = region.recon and region.recon[role.key]
       if span and span.from <= span.to then
-        for row, e in ipairs(role.proj) do
-          if e.line and e.line >= span.from and e.line <= span.to then
-            lo = lo and math.min(lo, row) or row
-            hi = hi and math.max(hi, row) or row
-          end
+        for line = span.from, span.to do
+          owner[line] = ri
         end
       end
     end
-    region.rows = lo and { first = lo, last = hi } or nil
+    for row, e in ipairs(role.proj) do
+      local ri = e.line and owner[e.line]
+      if ri then
+        local rows = regions[ri].rows
+        if not rows then
+          regions[ri].rows = { first = row, last = row }
+        elseif row < rows.first then
+          rows.first = row
+        elseif row > rows.last then
+          rows.last = row
+        end
+      end
+    end
   end
 end
 
@@ -322,6 +357,10 @@ function M.open(root, spec)
   local session = {
     config = root.config,
     spec = spec,
+    -- The spec's optional human name for this diff ("git HEAD — app.rs", "conflict —
+    -- merge.txt"). Carried on the session for add-ons / `on_attach`; what the panes
+    -- themselves show is each pane's `label`, which becomes its view name.
+    title = spec.title,
     rows = result.rows,
     hunks = result.hunks,
     ns = nx.ns.create("nxvim-diff"),
@@ -349,13 +388,22 @@ function M.open(root, spec)
   end
 
   -- Move every pane to alignment `row` (a hunk jump sets all panes explicitly so it
-  -- works regardless of `sync_cursor`; live scroll/cursor sync is nav.attach_sync),
-  -- then restore focus to the first pane.
+  -- works regardless of `sync_cursor`; live scroll/cursor sync is nav.attach_sync).
+  --
+  -- `view:set_cursor` FOCUSES the view it moves, so after the loop focus sits on the last
+  -- pane — hence the explicit re-focus. It restores the pane that was focused going in:
+  -- hitting `]c` from the right-hand pane used to teleport you into the left one, which
+  -- makes stepping through a diff from the side you're reading impossible.
   function session:goto_row(row)
+    local cur, keep = nx.win.current(), nil
     for _, p in ipairs(self.panes) do
+      if p.view:winid() == cur then
+        keep = p
+      end
       p.view:set_cursor(row)
     end
-    self.panes[1].view:focus()
+    local focused = keep or self.panes[1]
+    focused.view:focus()
   end
 
   -- Repaint the picked-line gutter signs (nav's pick_lines / clear_picked call this after
@@ -380,14 +428,13 @@ function M.open(root, spec)
               sign_hl_group = "NxDiffSignPick",
               priority = TEXT_PRIORITY,
             }
-            -- The background tint over the staged line's text (an empty line has no width
-            -- to paint, like the static line tints).
+            -- The staged line's background, the same full-width `line_hl_group` layer the
+            -- static tints use — at a higher priority, so a staged line reads as staged
+            -- rather than merely changed (the core keeps one line background per line).
             marks[#marks + 1] = {
               line = line0,
               col = 0,
-              end_row = line0,
-              end_col = #(p.text[pick.row] or ""),
-              hl_group = "NxDiffPick",
+              line_hl_group = "NxDiffPick",
               priority = PICK_PRIORITY,
             }
           end
@@ -397,16 +444,20 @@ function M.open(root, spec)
     end
   end
 
+  -- Re-run the diff's source and re-render (the `refresh` action / `R`). Routed through
+  -- the root so a spec carrying a `reload` hook re-reads it rather than re-rendering the
+  -- same stale snapshot.
   session.reopen = function()
-    root.open(spec)
+    root.refresh()
   end
 
   -- Lay out the panes in one tick (see the module header): pane A fills a fresh tab,
   -- the rest split beside it — all view-ops, so order is deterministic.
   local api = { run = root._run }
+  local split = split_for(root.config.layout)
   panes[1].view:mount({ tab = true })
   for i = 2, #panes do
-    panes[i].view:mount({ split = "vsplit" })
+    panes[i].view:mount({ split = split })
   end
   finish(session, api)
 

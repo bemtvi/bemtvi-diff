@@ -115,6 +115,42 @@ nx.test.describe("nxvim-diff.diff perf guards", function()
     nx.test.expect(kinds_of(a, b)).to_be("same,change,del,del,same")
     diff.LCS_CELL_LIMIT = saved
   end)
+
+  nx.test.it("inline trims the shared head/tail before the char LCS", function()
+    -- A one-character edit buried in a long line: the trim leaves a 1×1 middle, so the
+    -- span stays exact even with the cap down at a single cell (an untrimmed LCS over the
+    -- whole line would be 2001² cells).
+    local saved = diff.INLINE_CELL_LIMIT
+    diff.INLINE_CELL_LIMIT = 1
+    local head, tail = ("x"):rep(1000), ("y"):rep(1000)
+    local sp = diff.inline(head .. "a" .. tail, head .. "b" .. tail)
+    nx.test.expect(sp.a).to_equal({ { 1000, 1001 } })
+    nx.test.expect(sp.b).to_equal({ { 1000, 1001 } })
+    diff.INLINE_CELL_LIMIT = saved
+  end)
+
+  nx.test.it("past the inline cap the differing middle becomes one coarse span", function()
+    local saved = diff.INLINE_CELL_LIMIT
+    diff.INLINE_CELL_LIMIT = 1 -- the middle is 2×3 = 6 cells > 1 ⇒ coarse path
+    -- "S|ab|_E" vs "S|xyz|_E": the shared `S` head and `_E` tail are trimmed, then the
+    -- middle degrades to one span per side rather than a per-character alignment.
+    local sp = diff.inline("Sab_E", "Sxyz_E")
+    nx.test.expect(sp.a).to_equal({ { 1, 3 } })
+    nx.test.expect(sp.b).to_equal({ { 1, 4 } })
+    diff.INLINE_CELL_LIMIT = saved
+  end)
+
+  nx.test.it("inline on two huge lines stays fast (the no-freeze guard)", function()
+    -- The regression guard for the once-uncapped character LCS: two 40k-character lines
+    -- sharing no head or tail are 1.6 BILLION cells — a hang, on a diff that should render
+    -- instantly. Bounded, it must return promptly and still mark the whole line changed.
+    local a, b = ("ab"):rep(20000), ("cd"):rep(20000)
+    local started = os.clock()
+    local sp = diff.inline(a, b)
+    nx.test.expect(os.clock() - started < 2.0).to_be(true)
+    nx.test.expect(sp.a).to_equal({ { 0, 40000 } })
+    nx.test.expect(sp.b).to_equal({ { 0, 40000 } })
+  end)
 end)
 
 -- 3-way (diff3) alignment: a center-anchored merge of two 2-way diffs against `base`.

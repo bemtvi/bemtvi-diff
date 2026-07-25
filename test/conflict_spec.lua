@@ -157,4 +157,22 @@ nx.test.describe("nxvim-diff.conflict", function()
       end)
       .to_error("unterminated")
   end)
+
+  nx.test.it("fails loud on a nested <<<<<<< inside an open conflict", function()
+    -- git never writes nested conflicts, so this is a hand-mangled / half-resolved file.
+    -- Swallowing the marker as ordinary content would build sides that don't match the
+    -- markers — and `choose_*` would then write those wrong lines back over the file.
+    nx.test
+      .expect(function()
+        conflict.parse({
+          "<<<<<<< HEAD",
+          "ours",
+          "<<<<<<< HEAD",
+          "=======",
+          "theirs",
+          ">>>>>>> b",
+        })
+      end)
+      .to_error("nested")
+  end)
 end)

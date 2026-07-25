@@ -23,7 +23,7 @@
 --   config.lua      defaults + validated merge
 --   diff.lua        the pure LCS line-diff engine (alignment + hunks + projection)
 --   conflict.lua    pure conflict-marker parser → sides → spec (:NxDiffConflict)
---   git.lua         build a working-tree-vs-HEAD spec via nx.run (:NxDiffGit)
+--   git.lua         build a working-tree-vs-HEAD spec via nx.git (:NxDiffGit)
 --   highlights.lua  the Diff* palette (fallback-applied)
 --   view.lua        spec → panes: create views, lay out the split, paint fillers/tints
 --   nav.lua         hunk navigation (]c / [c) + scroll / cursor sync
@@ -39,6 +39,12 @@ M.config = config.defaults()
 
 local session = nil -- the active diff session (one at a time), owned by view.lua
 local hl_applied = false
+-- Bumped by every open() and close(). Rendering a spec can AWAIT (a `path` pane reads the
+-- file; the git source reads a blob), so the session handle lands a tick or more after the
+-- call — two opens in flight, or a close during one, would otherwise leave the loser's
+-- panes mounted with nothing owning them. Each open captures the generation and discards
+-- its own result if it is no longer the current one.
+local generation = 0
 
 -- Run an async body, surfacing any rejection as a notification rather than an
 -- unhandled promise error (the git source / view content reads nx.await promises).
@@ -54,10 +60,14 @@ M._run = run
 
 -- validate_spec(spec) — fail loud on a malformed spec and return it. Pure (no editor
 -- calls). A spec is:
---   { title = <string?>, panes = { <pane>, <pane> [, <pane>] } }
+--   { title = <string?>,                    -- a name for the diff, kept on the session
+--     reload = <function?>,                 -- re-run the source: () -> spec | promise
+--     panes = { <pane>, <pane> [, <pane>] } }
 -- and each pane carries EXACTLY ONE content source:
 --   { lines = {<string>...} | buf = <bufnr> | path = <abs path>,
---     label = <string?>, filetype = <string?>, readonly = <bool, default true> }
+--     label = <string?>, filetype = <string?> }
+-- Every pane renders as a read-only `nx.view` snapshot of its content — a diff is a
+-- viewer, not an editing surface, so there is no per-pane writability to ask for.
 function M.validate_spec(spec)
   if type(spec) ~= "table" then
     error("nxvim-diff: a diff spec must be a table", 2)
@@ -99,9 +109,17 @@ end
 function M.open(spec)
   M.validate_spec(spec)
   M.ensure_highlights()
-  M.close()
+  M.close() -- also bumps `generation`, retiring any open still reading its content
+  local mine = generation
   run(function()
-    session = require("nxvim-diff.view").open(M, spec)
+    local built = require("nxvim-diff.view").open(M, spec)
+    if mine ~= generation then
+      -- A newer open() (or a close()) landed while this one was reading its panes'
+      -- content. Tear down what we just mounted rather than orphaning it on screen.
+      require("nxvim-diff.view").close(built)
+      return
+    end
+    session = built
   end)
 end
 
@@ -123,27 +141,51 @@ function M.git_head()
   end)
 end
 
+-- Parse `buf`'s conflict markers into a ready-to-open spec (or nil + a reason when the
+-- buffer is clean). Raises on a malformed / unterminated marker. Takes the buffer number
+-- explicitly rather than reading the current one, so `refresh` can re-parse the ORIGINAL
+-- conflicted buffer from inside the diff, where the current buffer is a pane.
+--
+-- The whole buffer is parsed: the reconstructed sides carry all conflicts AND their
+-- surrounding context, so the diff is a full-file 3-way you can navigate, and
+-- `spec.resolve.regions` (in absolute buffer lines — the parse ran over the whole buffer)
+-- is what `choose_*` resolves the conflict under the cursor from.
+local function conflict_spec(buf)
+  -- Stamp the conflicted buffer's own filetype on every reconstructed pane so each side
+  -- gets the same syntax highlighting as the original file (mirrors git.head_spec).
+  local ft = vim.bo[buf] and vim.bo[buf].filetype or nil
+  local name = (nx.buf.name(buf) or ""):match("[^/]+$")
+  local spec, reason = require("nxvim-diff.conflict").spec(nx.buf.lines(buf, 0, -1), name, ft)
+  if not spec then
+    return nil, reason
+  end
+  -- Wire the write-back target so `choose_ours` / `choose_theirs` can replace the
+  -- conflict under the cursor in the live buffer. The region line ranges are already
+  -- absolute (the parse ran over the whole buffer), so only the buffer needs recording.
+  spec.resolve.buf = buf
+  -- `refresh` (`R`) re-parses the live buffer, so the diff follows a file edited from
+  -- elsewhere — and reports it cleanly once the last conflict is resolved away.
+  spec.reload = function()
+    return conflict_spec(buf)
+  end
+  return spec
+end
+
 -- conflict() — if the current buffer has git conflict markers, open the WHOLE file as a
 -- 3-way (diff3 style) or 2-way (plain merge style) diff, with every conflict shown in
 -- context. Backs :NxDiffConflict. A clean file just notifies.
 --
 -- A cheap `nx.buf.search` for the start marker answers "is there a conflict?" before the
--- whole buffer is read (a clean file pays nothing). The whole buffer is then parsed: the
--- reconstructed sides carry all conflicts AND their surrounding context, so the diff is a
--- full-file 3-way you can navigate; `spec.resolve.regions` (already in absolute buffer
--- lines — the parse ran over the whole buffer) is what `choose_*` resolves the conflict
--- under the cursor from. A malformed / unterminated marker makes `conflict.spec` raise;
--- it is caught and surfaced as a clean notification.
+-- whole buffer is read (a clean file pays nothing); `conflict_spec` above does the rest.
+-- A malformed / unterminated marker makes it raise; that is caught and surfaced as a
+-- clean notification.
 function M.conflict()
-  local conflict = require("nxvim-diff.conflict")
-  if not nx.buf.search(0, "^<<<<<<<", { engine = "vim" }) then
+  local buf = vim.api.nvim_get_current_buf()
+  if not nx.buf.search(buf, "^<<<<<<<", { engine = "vim" }) then
     nx.notify("nxvim-diff: no conflict markers found")
     return
   end
-  -- Stamp the conflicted buffer's own filetype on every reconstructed pane so each side
-  -- gets the same syntax highlighting as the original file (mirrors git.head_spec).
-  local ft = vim.bo[0] and vim.bo[0].filetype or nil
-  local ok, spec, reason = pcall(conflict.spec, nx.buf.lines(0, 0, -1), vim.fn.expand("%:t"), ft)
+  local ok, spec, reason = pcall(conflict_spec, buf)
   if not ok then
     -- `spec` holds the raise (an unterminated / malformed marker); strip any position
     -- prefix so the notice reads cleanly.
@@ -154,30 +196,53 @@ function M.conflict()
     nx.notify("nxvim-diff: " .. reason)
     return
   end
-  -- Wire the write-back target so `choose_ours` / `choose_theirs` can replace the
-  -- conflict under the cursor in the live buffer. The region line ranges are already
-  -- absolute (the parse ran over the whole buffer), so only the buffer needs recording.
-  if spec.resolve then
-    spec.resolve.buf = vim.api.nvim_get_current_buf()
-  end
   M.open(spec)
 end
 
 -- ===== lifecycle ============================================================
 
--- close() — tear down the active session (restore the prior layout), if any.
+-- close() — tear down the active session (restore the prior layout), if any. Also retires
+-- any open() still awaiting its content, so a diff cannot appear *after* you closed it.
 function M.close()
+  generation = generation + 1
   if session then
     require("nxvim-diff.view").close(session)
     session = nil
   end
 end
 
--- refresh() — re-run the session's originating source and re-render in place.
+-- refresh() — re-run the session's originating source and re-render.
+--
+-- A spec may carry `reload`, a function returning a fresh spec (or a promise of one);
+-- that is how a source stays live — `:NxDiffGit` re-reads the blob at HEAD, and
+-- `:NxDiffConflict` re-parses the buffer's markers. Without one there is nothing to
+-- re-run, so the same spec is re-rendered: `buf` and `path` panes re-read their content,
+-- while a literal `lines` pane is by definition already all there is.
 function M.refresh()
-  if session and session.reopen then
-    session.reopen()
+  local live = session
+  if not live then
+    return
   end
+  local spec = live.spec
+  local reload = spec and spec.reload
+  if type(reload) ~= "function" then
+    M.open(spec)
+    return
+  end
+  run(function()
+    local next_spec, reason = reload()
+    -- A promise (the git source is async) — await it for the spec.
+    if type(next_spec) == "table" and type(next_spec.next) == "function" then
+      next_spec = nx.await(next_spec)
+    end
+    if type(next_spec) ~= "table" then
+      -- The source has nothing to show any more (every conflict resolved, say). Say so
+      -- and leave the current diff alone rather than tearing it down silently.
+      nx.notify("nxvim-diff: cannot refresh — " .. tostring(reason or "the source is gone"), 3)
+      return
+    end
+    M.open(next_spec)
+  end)
 end
 
 -- session() — the live session handle (or nil), for add-ons and tests.

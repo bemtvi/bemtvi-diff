@@ -62,12 +62,19 @@ guards — live in the help file. The same source renders both on GitHub and in 
 ## Development
 
 A Lua test suite (`test/*_spec.lua`) runs on nxvim's native `nx.test` framework — pure
-specs for the LCS diff engine, the conflict-marker parser, config/spec validation, and
-hunk navigation; live specs driving real 2- and 3-pane diffs, scroll/cursor sync, the
-line tints + `DiffText` spans, and `:NxDiffGit`:
+specs for the LCS diff engine (including its no-freeze cell caps), the conflict-marker
+parser, config/spec validation, and hunk navigation; live specs driving real 2- and 3-pane
+diffs, pane layout and focus, scroll/cursor sync, the line tints + `DiffText` spans,
+conflict resolution, and `:NxDiffGit`:
 
 ```sh
 nxvim --test-plugin .
+```
+
+Lua is formatted with `stylua` (see `stylua.toml`):
+
+```sh
+stylua lua test examples
 ```
 
 The vimdoc `doc/nxvim-diff.txt` is **generated** from `doc/nxvim-diff.md` via

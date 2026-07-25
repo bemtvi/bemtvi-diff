@@ -12,7 +12,9 @@
 -- Inside a diff:
 --   ]c / [c      next / previous changed hunk     [C / ]C   first / last hunk
 --   co / ct      resolve a conflict to ours / theirs (:NxDiffConflict diffs only)
---   R            refresh         q   close
+--   cb / cp      keep both sides / stage the selected line(s) from this pane
+--   ca / cx      apply what's staged / discard it
+--   R            refresh (re-runs the source)     q   close
 -- The panes scroll and move their cursor in lockstep, and a changed line shows the
 -- edited characters highlighted (DiffText).
 --
@@ -51,8 +53,8 @@ vim.keymap.set("n", "<leader>du", function()
   diff.open({
     title = "caps demo",
     panes = {
-      { label = "original", lines = lines, readonly = true },
-      { label = "UPPER", lines = upper, readonly = true },
+      { label = "original", lines = lines },
+      { label = "UPPER", lines = upper },
     },
   })
 end, { desc = "nxvim-diff: diff this buffer against an uppercased copy" })
@@ -64,9 +66,9 @@ vim.keymap.set("n", "<leader>d3", function()
   require("nxvim-diff").open({
     title = "3-way demo",
     panes = {
-      { label = "ours", lines = { "alpha", "BRAVO", "charlie", "delta" }, readonly = true },
-      { label = "base", lines = { "alpha", "bravo", "charlie" }, readonly = true },
-      { label = "theirs", lines = { "alpha", "bravo", "CHARLIE", "echo" }, readonly = true },
+      { label = "ours", lines = { "alpha", "BRAVO", "charlie", "delta" } },
+      { label = "base", lines = { "alpha", "bravo", "charlie" } },
+      { label = "theirs", lines = { "alpha", "bravo", "CHARLIE", "echo" } },
     },
   })
 end, { desc = "nxvim-diff: open a synthetic 3-way (diff3) diff" })

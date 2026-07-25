@@ -11,6 +11,13 @@
 local M = {}
 
 -- Find the hunk to jump to from the active pane's current alignment row. Wraps around.
+--
+-- Both directions match vim's diff-mode `]c` / `[c`, which move to the next / previous
+-- START OF A CHANGE. Forward that means the first hunk starting strictly after the cursor.
+-- Backward it means the last hunk starting strictly BEFORE the cursor — note `first`, not
+-- `last`: standing in the middle of a multi-line hunk, `[c` walks to that hunk's own first
+-- line (you asked for the previous change start, and there is one above you), rather than
+-- skipping the hunk you are reading and landing on the one before it.
 local function seek(session, dir)
   local hunks = session.hunks or {}
   if #hunks == 0 then
@@ -26,7 +33,7 @@ local function seek(session, dir)
     return hunks[1] -- past the last hunk → wrap to the first
   else
     for i = #hunks, 1, -1 do
-      if hunks[i].last < row then
+      if hunks[i].first < row then
         return hunks[i]
       end
     end
@@ -62,6 +69,8 @@ end
 function M.refresh(session)
   if session.reopen then
     session.reopen()
+  else
+    require("nxvim-diff").refresh()
   end
 end
 
@@ -343,6 +352,19 @@ function M.attach_sync(session)
 
   local ids = {}
 
+  -- Run one mirroring pass with `_syncing` raised, ALWAYS lowering it again. Straight-line
+  -- `flag = true … flag = false` loses the reset if anything in between raises (a window
+  -- that vanished mid-pass, say) — and a latched `_syncing` silently kills scroll and
+  -- cursor sync for the rest of the session, with no error anyone ever sees.
+  local function guarded(body)
+    session._syncing = true
+    local ok, err = pcall(body)
+    session._syncing = false
+    if not ok then
+      nx.notify("nxvim-diff: pane sync failed: " .. tostring(err), 3)
+    end
+  end
+
   if session.config.sync_scroll then
     ids[#ids + 1] = nx.autocmd.create("WinScrolled", {
       callback = function(args)
@@ -353,18 +375,18 @@ function M.attach_sync(session)
         if not win or not pane_for_win(win) then
           return -- a scroll in some unrelated window — ignore
         end
-        session._syncing = true
-        local src = nx.win.call(win, nx.win.saveview)
-        for _, w in ipairs(other_wins(win)) do
-          local cur = nx.win.call(w, nx.win.saveview)
-          if cur.topline ~= src.topline then
-            nx.win.set_topline(w, src.topline)
+        guarded(function()
+          local src = nx.win.call(win, nx.win.saveview)
+          for _, w in ipairs(other_wins(win)) do
+            local cur = nx.win.call(w, nx.win.saveview)
+            if cur.topline ~= src.topline then
+              nx.win.set_topline(w, src.topline)
+            end
+            if not session.config.wrap and cur.leftcol ~= src.leftcol then
+              nx.win.set_leftcol(w, src.leftcol)
+            end
           end
-          if not session.config.wrap and cur.leftcol ~= src.leftcol then
-            nx.win.set_leftcol(w, src.leftcol)
-          end
-        end
-        session._syncing = false
+        end)
       end,
     })
   end
@@ -379,12 +401,12 @@ function M.attach_sync(session)
         if not pane_for_win(win) then
           return
         end
-        local row = session:cursor_row()
-        session._syncing = true
-        for _, w in ipairs(other_wins(win)) do
-          nx.win.set_cursor(w, row)
-        end
-        session._syncing = false
+        guarded(function()
+          local row = session:cursor_row()
+          for _, w in ipairs(other_wins(win)) do
+            nx.win.set_cursor(w, row)
+          end
+        end)
       end,
     })
   end

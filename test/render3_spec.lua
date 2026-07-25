@@ -73,12 +73,12 @@ nx.test.describe("nxvim-diff 3-way render", function()
     nx.test.expect(pane_lines(s.panes[3])).to_be("|y|") -- theirs dropped x, never had z
     -- ours' inserted z (row 2, 0-based) tinted DiffAdd
     local add = marks_where(s.panes[1], s, 2, function(d)
-      return d.hl_group == "DiffAdd"
+      return d.line_hl_group == "DiffAdd"
     end)
     nx.test.expect(#add).to_be(1)
     -- the base line ours/theirs disagree on (x, row 0) is tinted DiffChange on the base pane
     local chg = marks_where(s.panes[2], s, 0, function(d)
-      return d.hl_group == "DiffChange"
+      return d.line_hl_group == "DiffChange"
     end)
     nx.test.expect(#chg).to_be(1)
   end)

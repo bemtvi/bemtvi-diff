@@ -91,6 +91,54 @@ nx.test.describe("nxvim-diff render", function()
     nx.test.expect(s.panes[3].view.name).to_be("theirs")
   end)
 
+  nx.test.it("a hunk jump keeps focus on the pane you jumped from", function()
+    diff.open({
+      panes = {
+        { label = "old", lines = { "a", "b", "c" } },
+        { label = "new", lines = { "a", "B", "c" } },
+      },
+    })
+    local s = await_ready()
+    -- Read the diff from the RIGHT pane, then jump a hunk. `view:set_cursor` focuses the
+    -- view it moves, so goto_row must put focus back where it found it — otherwise every
+    -- `]c` teleports you into the left pane and you cannot step through a diff from the
+    -- side you are actually reading.
+    s.panes[2].view:focus()
+    nx.await(nx.wait_for(function()
+      return nx.win.current() == s.panes[2].view:winid()
+    end, { tries = 100, interval = 5, message = "the right pane never took focus" }))
+
+    require("nxvim-diff.nav").next_hunk(s)
+    nx.await(nx.wait_for(function()
+      return s:cursor_row() == 2
+    end, { tries = 100, interval = 5, message = "the hunk jump never landed" }))
+    nx.test.expect(nx.win.current()).to_be(s.panes[2].view:winid())
+  end)
+
+  nx.test.it("layout = 'horizontal' stacks the panes instead of splitting sideways", function()
+    -- `layout` was validated and then silently ignored — every diff came out vertical.
+    -- Measure the first pane both ways: stacked it spans the FULL width and shares the
+    -- height; side by side it is the other way round.
+    local function first_pane_size(layout)
+      require("nxvim-diff").setup({ layout = layout })
+      diff.open({
+        panes = {
+          { label = "l", lines = { "x", "y" } },
+          { label = "r", lines = { "x", "Y" } },
+        },
+      })
+      local win = await_ready().panes[1].view:winid()
+      local w, h = nx.win.width(win), nx.win.height(win)
+      diff.close()
+      return w, h
+    end
+    local vw, vh = first_pane_size("vertical")
+    local hw, hh = first_pane_size("horizontal")
+    nx.test.expect(hw > vw).to_be(true) -- stacked ⇒ full width, not half
+    nx.test.expect(hh < vh).to_be(true) -- …and half the height, not full
+    require("nxvim-diff").setup({}) -- back to the defaults for the rest of the suite
+  end)
+
   nx.test.it("`:q` on one pane tears down the whole diff", function()
     diff.open({
       panes = {

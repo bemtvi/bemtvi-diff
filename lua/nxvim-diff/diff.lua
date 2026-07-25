@@ -17,24 +17,48 @@
 
 local M = {}
 
+-- to_lines(s) — split a blob of text into the line array the engine diffs, dropping the
+-- single trailing empty a final newline produces (so "a\nb\n" → {"a","b"}, "" → {}, but
+-- "a\n\n" → {"a",""}, which really does end in a blank line). Every source funnels through
+-- this one splitter — a file read, subprocess stdout, a git blob — so a trailing newline
+-- can't mean "one extra blank line" on one side of a diff and nothing on the other.
+function M.to_lines(s)
+  local out = {}
+  for line in ((s or "") .. "\n"):gmatch("([^\n]*)\n") do
+    out[#out + 1] = line
+  end
+  if out[#out] == "" then
+    out[#out] = nil
+  end
+  return out
+end
+
 -- LCS backtrace → an ordered op list of { op="same"/"del"/"add", a=, b= }.
+--
+-- The DP table is ONE FLAT ARRAY, not a table-of-tables: `dp[i * w + j + 1]` is the LCS
+-- length of a[i+1..n] vs b[j+1..m] (0-indexed origins, `w = m + 1`). A nested table
+-- allocates n+1 separate tables (each with its own header and growth rehashes) for the
+-- same cells; one densely pre-filled array is a fraction of the memory and of the GC
+-- churn, which is what makes the cell caps below a workable ceiling rather than a cliff.
 local function lcs_ops(a, b)
   local n, m = #a, #b
-  -- dp[i][j] = LCS length of a[i+1..n] vs b[j+1..m] (0-indexed origins).
+  local w = m + 1
+  -- Pre-fill densely (ascending, from 1) so the whole table lands in Lua's array part
+  -- instead of degrading into the hash part on sparse descending writes. This also
+  -- seeds the i==n / j==m boundary rows, which are all zero by definition.
   local dp = {}
-  for i = 0, n do
-    dp[i] = {}
-    dp[i][m] = 0
-  end
-  for j = 0, m do
-    dp[n][j] = 0
+  for k = 1, (n + 1) * w do
+    dp[k] = 0
   end
   for i = n - 1, 0, -1 do
+    local row, below = i * w, (i + 1) * w
+    local ai = a[i + 1]
     for j = m - 1, 0, -1 do
-      if a[i + 1] == b[j + 1] then
-        dp[i][j] = dp[i + 1][j + 1] + 1
+      if ai == b[j + 1] then
+        dp[row + j + 1] = dp[below + j + 2] + 1
       else
-        dp[i][j] = math.max(dp[i + 1][j], dp[i][j + 1])
+        local d, r = dp[below + j + 1], dp[row + j + 2]
+        dp[row + j + 1] = (d > r) and d or r
       end
     end
   end
@@ -45,7 +69,7 @@ local function lcs_ops(a, b)
     if a[i + 1] == b[j + 1] then
       ops[#ops + 1] = { op = "same", a = i + 1, b = j + 1 }
       i, j = i + 1, j + 1
-    elseif dp[i + 1][j] >= dp[i][j + 1] then
+    elseif dp[(i + 1) * w + j + 1] >= dp[i * w + j + 2] then
       ops[#ops + 1] = { op = "del", a = i + 1 }
       i = i + 1
     else
@@ -378,23 +402,61 @@ local function coalesce(changed, starts, total)
   return ranges
 end
 
+-- The character-LCS ceiling for ONE `change` row, the per-line twin of LCS_CELL_LIMIT.
+-- "Lines are short" is not a safe assumption — a minified bundle, a base64 blob or a
+-- generated data file is a single line tens of thousands of characters wide, and an
+-- uncapped O(len_a · len_b) table over two of those is tens of billions of cells: the
+-- editor would freeze on a diff it should have rendered instantly. Past the cap the row
+-- still gets spans, just coarse ones (the whole differing middle as one span per side).
+-- Lower than LCS_CELL_LIMIT on purpose: this runs once PER CHANGED ROW, not once per
+-- diff. (Exposed on M so a test can lower it.)
+M.INLINE_CELL_LIMIT = 250000
+
 -- inline(a_line, b_line) → the changed character spans within a `change` row, as
 -- { a = {{from,to}...}, b = {{from,to}...} } half-open 0-based BYTE ranges, ready to drop
 -- into `DiffText` extmarks (col / end_col). A character-level LCS of the two lines: the
 -- characters NOT on the common subsequence are the edits — deletions land on the `a`
--- side, insertions on the `b` side. O(len_a · len_b) per row (lines are short); the
--- caller gates it behind `config.inline`.
+-- side, insertions on the `b` side. The caller gates it behind `config.inline`.
+--
+-- Bounded exactly the way `compute` is, for the same reason: the shared leading/trailing
+-- CHARACTERS are trimmed first (an edit inside a long line shrinks to a tiny middle, and
+-- the trim can't change the answer — trimmed characters are equal, so the LCS would have
+-- matched them anyway), and a middle still over `INLINE_CELL_LIMIT` cells degrades to
+-- "the whole middle changed" instead of allocating the table.
 function M.inline(a_line, b_line)
   a_line, b_line = a_line or "", b_line or ""
+  if a_line == b_line then
+    return { a = {}, b = {} } -- nothing to split into characters
+  end
+  local changed_a, changed_b = {}, {}
   local sa, la = char_starts(a_line)
   local sb, lb = char_starts(b_line)
-  local ops = lcs_ops(chars_of(a_line, sa, la), chars_of(b_line, sb, lb))
-  local changed_a, changed_b = {}, {}
-  for _, op in ipairs(ops) do
-    if op.op == "del" then
-      changed_a[op.a] = true
-    elseif op.op == "add" then
-      changed_b[op.b] = true
+  local ca, cb = chars_of(a_line, sa, la), chars_of(b_line, sb, lb)
+  local na, nb = #ca, #cb
+  local p = common_prefix(ca, cb)
+  local s = common_suffix(ca, cb, p)
+
+  if (na - s - p) * (nb - s - p) > M.INLINE_CELL_LIMIT then
+    for i = p + 1, na - s do
+      changed_a[i] = true
+    end
+    for j = p + 1, nb - s do
+      changed_b[j] = true
+    end
+  else
+    local mid_a, mid_b = {}, {}
+    for i = p + 1, na - s do
+      mid_a[#mid_a + 1] = ca[i]
+    end
+    for j = p + 1, nb - s do
+      mid_b[#mid_b + 1] = cb[j]
+    end
+    for _, op in ipairs(lcs_ops(mid_a, mid_b)) do
+      if op.op == "del" then
+        changed_a[op.a + p] = true -- rebase past the trimmed prefix
+      elseif op.op == "add" then
+        changed_b[op.b + p] = true
+      end
     end
   end
   return { a = coalesce(changed_a, sa, la), b = coalesce(changed_b, sb, lb) }

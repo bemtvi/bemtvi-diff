@@ -10,7 +10,11 @@
 --
 -- Fallback colors are Catppuccin-Mocha values so a bare setup() reads well on a dark
 -- background with no theme. Unlike a foreground-only palette these DO carry `bg` — a
--- diff wants the whole changed line tinted — kept dim so text stays legible.
+-- diff wants the whole changed line tinted — kept dim so text stays legible. `bg` is the
+-- attribute that matters for the three line groups in particular: they are painted as the
+-- core's full-width line-background layer (see view.lua's `pane_marks`), so a theme that
+-- gives `DiffAdd` only a foreground tints nothing. `DiffText` is an ordinary text span
+-- over the changed characters, so its `fg` / `bold` apply as usual.
 
 local M = {}
 
@@ -28,7 +32,6 @@ M.defaults = {
   NxDiffSignDelete = { fg = "#f38ba8" }, -- the "-" hunk sign
   NxDiffSignPick = { fg = "#89b4fa", bold = true }, -- the picked-line gutter sign
   NxDiffPick = { bg = "#243b55" }, -- a staged (picked) line's background tint
-  NxDiffLabel = { fg = "#b4befe", bold = true }, -- a pane's header label (winbar/title)
 }
 
 -- apply(overrides) — define each group as a fallback (see the module header). An

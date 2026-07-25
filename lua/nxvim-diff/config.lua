@@ -67,7 +67,11 @@ local DEFAULTS = {
   -- The glyph drawn across a blank filler (alignment) row, vim's diff `fillchars` style,
   -- via the core `line_fill` extmark decoration. "" leaves the row blank.
   fillchar = "-",
-  layout = "auto", -- "auto" (by pane count), "vertical" (side-by-side), or "horizontal"
+  -- How the panes are arranged: "vertical" side by side, "horizontal" stacked. "auto"
+  -- resolves to vertical at both supported pane counts (2 and 3 panes each read best in
+  -- columns) — it is a distinct name so the choice can become pane-count-dependent
+  -- without breaking a config that asked for it.
+  layout = "auto",
   keymaps = DEFAULT_KEYMAPS,
   highlights = {}, -- highlight-group overrides, keyed by group name (see highlights.lua)
   on_attach = nil, -- fn(session, api, bufnr): run once per pane buffer (custom maps)
@@ -106,6 +110,12 @@ local function validate(cfg)
   end
   if type(cfg.fillchar) ~= "string" then
     error("nxvim-diff: fillchar must be a string", 3)
+  end
+  -- The view layer calls `on_attach` only when it IS a function, so a misspelled or
+  -- wrong-typed value would otherwise be dropped without a word — the hook simply never
+  -- runs and the user hunts a phantom bug. Reject it here instead.
+  if cfg.on_attach ~= nil and type(cfg.on_attach) ~= "function" then
+    error("nxvim-diff: on_attach must be a function (or nil)", 3)
   end
   for key, action in pairs(cfg.keymaps) do
     if action ~= false and type(action) ~= "function" and not M.ACTIONS[action] then

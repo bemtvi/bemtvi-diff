@@ -5,22 +5,18 @@
 -- is the extension point, not a pile of command flags.
 --
 -- This is itself an ordinary client of the public API: it gathers content with the
--- async `nx.run` and returns a spec; init.lua awaits it and calls open().
+-- async, promise-returning `nx.git.*` and returns a spec; init.lua awaits it and calls
+-- open(). The spec carries a `reload` hook, so `refresh` (`R`) re-reads HEAD.
+
+local diff = require("nxvim-diff.diff")
 
 local M = {}
 
--- to_lines(s) — split subprocess stdout into a line array, dropping the single
--- trailing empty a final newline produces (so "a\nb\n" → {"a","b"}).
-function M.to_lines(s)
-  local out = {}
-  for line in (s .. "\n"):gmatch("([^\n]*)\n") do
-    out[#out + 1] = line
-  end
-  if #out > 0 and out[#out] == "" then
-    out[#out] = nil
-  end
-  return out
-end
+-- to_lines(s) — split a git blob / subprocess stdout into a line array. The canonical
+-- splitter lives in the pure engine (`diff.to_lines`) so every content source — a git
+-- blob here, a `path` pane's file read in view.lua — agrees on what a trailing newline
+-- means; this stays as the name a caller building its own git-backed spec reaches for.
+M.to_lines = diff.to_lines
 
 -- repo_relative(file, toplevel) — `file` expressed relative to the repo root, by simple
 -- prefix strip. A standalone helper for a caller building its own spec; `head_spec` no
@@ -60,8 +56,14 @@ function M.head_spec(ctx)
     local rel = ctx.file:match("[^/]+$") or ctx.file
     local ok, content = pcall(nx.await, nx.git.show(ctx.file, "HEAD"))
     if not ok then
-      if type(content) == "table" and content.code == "ENOREPO" then
+      local code = type(content) == "table" and content.code or nil
+      if code == "ENOREPO" then
         error("not a git repository", 0)
+      elseif code and code ~= "ENOENT" then
+        -- Anything that ISN'T "the file has no HEAD version" must say what actually went
+        -- wrong (a broken index, an unreadable object): reporting every failure as
+        -- "no HEAD version" would make a real git error look like an untracked file.
+        error(("git failed reading %s at HEAD: %s"):format(rel, content.message or code), 0)
       end
       error(("no HEAD version of %s"):format(rel), 0)
     end
@@ -69,9 +71,14 @@ function M.head_spec(ctx)
     local ft = vim.bo[ctx.bufnr] and vim.bo[ctx.bufnr].filetype or nil
     return {
       title = ("git HEAD — %s"):format(rel),
+      -- `refresh` (`R`) re-runs THIS, so it re-reads the blob at HEAD rather than
+      -- re-rendering the snapshot the diff was opened with.
+      reload = function()
+        return M.head_spec(ctx)
+      end,
       panes = {
-        { label = "HEAD", lines = M.to_lines(content), filetype = ft, readonly = true },
-        { label = "working tree", buf = ctx.bufnr, filetype = ft, readonly = false },
+        { label = "HEAD", lines = M.to_lines(content), filetype = ft },
+        { label = "working tree", buf = ctx.bufnr, filetype = ft },
       },
     }
   end)()

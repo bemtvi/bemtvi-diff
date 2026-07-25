@@ -64,4 +64,19 @@ nx.test.describe("nxvim-diff.config", function()
       end)
       .to_error("sync_scroll")
   end)
+
+  nx.test.it("rejects a non-function on_attach (it would silently never run)", function()
+    -- The view layer only calls on_attach when it IS a function, so a wrong-typed value
+    -- used to be dropped without a word — the hook never fires and you hunt a ghost.
+    nx.test
+      .expect(function()
+        config.merge(config.defaults(), { on_attach = "nope" })
+      end)
+      .to_error("on_attach")
+    -- nil (the default) and a real function are both fine.
+    nx.test.expect(config.merge(config.defaults(), {}).on_attach).to_be_nil()
+    nx.test
+      .expect(type(config.merge(config.defaults(), { on_attach = function() end }).on_attach))
+      .to_be("function")
+  end)
 end)
