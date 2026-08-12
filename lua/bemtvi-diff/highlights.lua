@@ -1,4 +1,4 @@
--- nxvim-diff.highlights — the diff palette and a fallback-only applier.
+-- bemtvi-diff.highlights — the diff palette and a fallback-only applier.
 --
 -- The line groups use the canonical **Diff\*** names vim/neovim diff mode uses
 -- (`DiffAdd` / `DiffDelete` / `DiffChange` / `DiffText`), on purpose: a ported
@@ -6,7 +6,7 @@
 -- a default when the group isn't already defined (and an explicit user override always
 -- wins), so a colorscheme that styles `Diff*` keeps its colors regardless of load
 -- order. The plugin-private extras (the sign glyphs' colors, the filler tint) live
--- under the `NxDiff*` namespace.
+-- under the `BtvDiff*` namespace.
 --
 -- Fallback colors are Catppuccin-Mocha values so a bare setup() reads well on a dark
 -- background with no theme. Unlike a foreground-only palette these DO carry `bg` — a
@@ -18,7 +18,7 @@
 
 local M = {}
 
--- name -> default spec (the `nx.hl.define` opts table).
+-- name -> default spec (the `btv.hl.define` opts table).
 M.defaults = {
   -- canonical Diff* (themed by a ported colorscheme)
   DiffAdd = { bg = "#1e3b2f" }, -- an added line (the b-only / insertion rows)
@@ -26,12 +26,12 @@ M.defaults = {
   DiffChange = { bg = "#1e2f3b" }, -- a changed line's unchanged background
   DiffText = { bg = "#28506e", bold = true }, -- the changed spans within a DiffChange line
   -- plugin-private extras
-  NxDiffFiller = { fg = "#45475a" }, -- the alignment filler rows (fillchar gutter)
-  NxDiffSignAdd = { fg = "#a6e3a1" }, -- the "+" hunk sign
-  NxDiffSignChange = { fg = "#f9e2af" }, -- the "~" hunk sign
-  NxDiffSignDelete = { fg = "#f38ba8" }, -- the "-" hunk sign
-  NxDiffSignPick = { fg = "#89b4fa", bold = true }, -- the picked-line gutter sign
-  NxDiffPick = { bg = "#243b55" }, -- a staged (picked) line's background tint
+  BtvDiffFiller = { fg = "#45475a" }, -- the alignment filler rows (fillchar gutter)
+  BtvDiffSignAdd = { fg = "#a6e3a1" }, -- the "+" hunk sign
+  BtvDiffSignChange = { fg = "#f9e2af" }, -- the "~" hunk sign
+  BtvDiffSignDelete = { fg = "#f38ba8" }, -- the "-" hunk sign
+  BtvDiffSignPick = { fg = "#89b4fa", bold = true }, -- the picked-line gutter sign
+  BtvDiffPick = { bg = "#243b55" }, -- a staged (picked) line's background tint
 }
 
 -- apply(overrides) — define each group as a fallback (see the module header). An
@@ -41,14 +41,14 @@ function M.apply(overrides)
   overrides = overrides or {}
   for name, spec in pairs(M.defaults) do
     if overrides[name] then
-      nx.hl.define(0, name, overrides[name])
-    elseif not nx.hl.exists(name) then
-      nx.hl.define(0, name, spec)
+      btv.hl.define(0, name, overrides[name])
+    elseif not btv.hl.exists(name) then
+      btv.hl.define(0, name, spec)
     end
   end
   for name, spec in pairs(overrides) do
     if not M.defaults[name] then
-      nx.hl.define(0, name, spec)
+      btv.hl.define(0, name, spec)
     end
   end
 end

@@ -1,8 +1,8 @@
--- ~~~ Runnable demo for nxvim-diff ~~~
+-- ~~~ Runnable demo for bemtvi-diff ~~~
 --
--- Point nxvim at this folder as its config and open the sample file:
+-- Point bemtvi at this folder as its config and open the sample file:
 --
---     NXVIM_CONFIG=examples nxvim examples/sample/new.txt
+--     BEMTVI_CONFIG=examples bemtvi examples/sample/new.txt
 --
 -- TRY IT:
 --   :DiffGit        diff the current file's working tree against git HEAD
@@ -26,13 +26,13 @@
 vim.g.mapleader = " "
 
 -- Load the plugin straight from this repo (a local-dev spec: `dir` is never cloned).
--- A real config would instead use `{ "davidrios/nxvim-diff", config = ... }`.
-nx.plugins({
+-- A real config would instead use `{ "davidrios/bemtvi-diff", config = ... }`.
+btv.plugins({
   {
-    name = "nxvim-diff",
+    name = "bemtvi-diff",
     dir = vim.fn.expand("<sfile>:p:h:h"), -- the repo root (this file's grandparent dir)
     config = function()
-      require("nxvim-diff").setup({
+      require("bemtvi-diff").setup({
         sync_scroll = true,
         inline = true,
         signs = true, -- +/~/- gutter signs on changed lines (try it; default off)
@@ -44,7 +44,7 @@ nx.plugins({
 
 -- Extensibility demo (Lua API only — no command needed): feed the viewer any diff.
 vim.keymap.set("n", "<leader>du", function()
-  local diff = require("nxvim-diff")
+  local diff = require("bemtvi-diff")
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local upper = {}
   for i, l in ipairs(lines) do
@@ -57,13 +57,13 @@ vim.keymap.set("n", "<leader>du", function()
       { label = "UPPER", lines = upper },
     },
   })
-end, { desc = "nxvim-diff: diff this buffer against an uppercased copy" })
+end, { desc = "bemtvi-diff: diff this buffer against an uppercased copy" })
 
 -- 3-way demo (Lua API only): three synthetic sides. In a 3-pane spec the MIDDLE pane is
 -- the common base; the outer two are center-anchored against it — exactly what
 -- `:DiffConflict` builds from a diff3 conflict.
 vim.keymap.set("n", "<leader>d3", function()
-  require("nxvim-diff").open({
+  require("bemtvi-diff").open({
     title = "3-way demo",
     panes = {
       { label = "ours", lines = { "alpha", "BRAVO", "charlie", "delta" } },
@@ -71,4 +71,4 @@ vim.keymap.set("n", "<leader>d3", function()
       { label = "theirs", lines = { "alpha", "bravo", "CHARLIE", "echo" } },
     },
   })
-end, { desc = "nxvim-diff: open a synthetic 3-way (diff3) diff" })
+end, { desc = "bemtvi-diff: open a synthetic 3-way (diff3) diff" })

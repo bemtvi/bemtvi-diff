@@ -1,24 +1,24 @@
-*nxvim-diff.txt*   A Meld-style side-by-side (and 3-way) diff viewer for nxvim
+*bemtvi-diff.txt*   A Meld-style side-by-side (and 3-way) diff viewer for bemtvi
 
 ==============================================================================
-Table of Contents                               *nxvim-diff-table-of-contents*
+Table of Contents                               *bemtvi-diff-table-of-contents*
 
-1. Commands                                              |nxvim-diff-commands|
-2. Usage                                                    |nxvim-diff-usage|
-3. Three-way layout                              |nxvim-diff-three-way-layout|
-4. The Lua API                                        |nxvim-diff-the-lua-api|
-5. Extending                                            |nxvim-diff-extending|
-6. Configuration                                    |nxvim-diff-configuration|
-7. Conflict resolution                        |nxvim-diff-conflict-resolution|
-8. Performance                                        |nxvim-diff-performance|
+1. Commands                                              |bemtvi-diff-commands|
+2. Usage                                                    |bemtvi-diff-usage|
+3. Three-way layout                              |bemtvi-diff-three-way-layout|
+4. The Lua API                                        |bemtvi-diff-the-lua-api|
+5. Extending                                            |bemtvi-diff-extending|
+6. Configuration                                    |bemtvi-diff-configuration|
+7. Conflict resolution                        |bemtvi-diff-conflict-resolution|
+8. Performance                                        |bemtvi-diff-performance|
 
-A Meld-style side-by-side (and 3-way) diff viewer for nxvim. It is a diff
+A Meld-style side-by-side (and 3-way) diff viewer for bemtvi. It is a diff
 VIEWER you feed a diff to — not a git tool. The core renders and navigates a
 diff; where the two (or three) sides come from is the caller's business. It
-is built entirely on the native `nx.*` plugin API (ADR 0002): the sides are
-read-only `nx.view` surfaces, the line tints / intra-line spans / alignment are
+is built entirely on the native `btv.*` plugin API (ADR 0002): the sides are
+read-only `btv.view` surfaces, the line tints / intra-line spans / alignment are
 extmarks, and the panes stay locked together over the editor's scrollbind
-seam (`WinScrolled` + `nx.win.set_topline` / `set_leftcol` / `set_cursor`).
+seam (`WinScrolled` + `btv.win.set_topline` / `set_leftcol` / `set_cursor`).
 
 >
      HEAD — src/app.rs                │ working tree
@@ -35,11 +35,11 @@ line; the blank left row is the alignment filler opposite it.)
 Only two commands are exposed; everything else is the Lua API, because a diff
 source is better expressed in Lua than as a pile of command flags.
 
-                                                *nxvim-diff* *nxvim-diff-intro*
+                                                *bemtvi-diff* *bemtvi-diff-intro*
 
 
 ==============================================================================
-1. Commands                                              *nxvim-diff-commands*
+1. Commands                                              *bemtvi-diff-commands*
 
 >
     :DiffGit       Diff the current file's working tree vs git HEAD.
@@ -52,7 +52,7 @@ FILE's own directory (not the editor cwd), so a file edited from outside
 a git repository", "this buffer has no file to diff", or "no HEAD version of
 `<file>`" (a new / untracked file). Richer comparisons (an arbitrary rev, the
 index, `rev..rev`) are intentionally Lua, not flags: build a spec with
-`require("nxvim-diff.git").to_lines(...)` and call `open()` (see The Lua API).
+`require("bemtvi-diff.git").to_lines(...)` and call `open()` (see The Lua API).
 
 `:DiffConflict` — if the current buffer has git conflict markers, open them
 as a diff. A diff3-style conflict (with a `|||||||` base section, from
@@ -63,7 +63,7 @@ clean file just notifies.
 
 
 ==============================================================================
-2. Usage                                                    *nxvim-diff-usage*
+2. Usage                                                    *bemtvi-diff-usage*
 
 The panes scroll and move their cursor in lockstep (Meld-style scrollbind), and
 a changed line shows its edited characters tinted (`DiffText`). The default
@@ -92,7 +92,7 @@ on a `:DiffConflict` diff — see Conflict resolution.
 
 
 ==============================================================================
-3. Three-way layout                              *nxvim-diff-three-way-layout*
+3. Three-way layout                              *bemtvi-diff-three-way-layout*
 
 A 3-pane diff is center-anchored: the MIDDLE pane is the common base, and the
 two outer panes are aligned against it. A base line and each side's version
@@ -106,17 +106,17 @@ the base. `:DiffConflict` builds exactly such a spec from a diff3 conflict.
 
 
 ==============================================================================
-4. The Lua API                                        *nxvim-diff-the-lua-api*
+4. The Lua API                                        *bemtvi-diff-the-lua-api*
 
-- `require("nxvim-diff").open({spec})` — THE generic entry point ("send a diff for preview"). Any
+- `require("bemtvi-diff").open({spec})` — THE generic entry point ("send a diff for preview"). Any
     plugin (git, LSP rename, formatter, …) builds a `{spec}` and calls this. Validates the spec (fails
     loud), closes any live session, and renders.
-- `require("nxvim-diff").git_head()` — open the current file vs git HEAD (what `:DiffGit` calls).
-- `require("nxvim-diff").conflict()` — parse this buffer's conflict markers and open them (what
+- `require("bemtvi-diff").git_head()` — open the current file vs git HEAD (what `:DiffGit` calls).
+- `require("bemtvi-diff").conflict()` — parse this buffer's conflict markers and open them (what
     `:DiffConflict` calls).
-- `require("nxvim-diff").close()` — tear down the active diff, restoring the prior layout.
-- `require("nxvim-diff").refresh()` — re-run the active session's source and re-render (`R`).
-- `require("nxvim-diff").session()` — the live session handle (or `nil`), for add-ons and tests.
+- `require("bemtvi-diff").close()` — tear down the active diff, restoring the prior layout.
+- `require("bemtvi-diff").refresh()` — re-run the active session's source and re-render (`R`).
+- `require("bemtvi-diff").session()` — the live session handle (or `nil`), for add-ons and tests.
 
 A `{spec}` is:
 
@@ -138,7 +138,7 @@ strings), `buf` (a bufnr), or `path` (an absolute path) — plus optional
     { label = "disk", path = "/abs/file" }
 <
 
-Every pane renders as a read-only `nx.view` snapshot of its content: this is a
+Every pane renders as a read-only `btv.view` snapshot of its content: this is a
 viewer, not an editing surface, so there is no per-pane writability to ask for.
 `label` becomes the pane's displayed name (what the statusline and tab label
 show); `title` names the diff as a whole and is carried on the session for
@@ -155,28 +155,28 @@ In a 3-pane spec the middle pane is the base (see Three-way layout).
 
 
 ==============================================================================
-5. Extending                                            *nxvim-diff-extending*
+5. Extending                                            *bemtvi-diff-extending*
 
 Because `open()` takes any spec, a one-screen plugin can preview a diff. A
 formatter preview — this buffer vs its formatted output. Running the
-formatter is async (`nx.run`): nxvim has no blocking shell-out, and a
+formatter is async (`btv.run`): bemtvi has no blocking shell-out, and a
 subprocess on the editor thread would freeze the UI anyway.
 
 >lua
-    nx.keymap.set("n", "<leader>fp", function()
-      local src = nx.buf.lines(0, 0, -1)
-      local ft, name = nx.bo[0].filetype, nx.buf.name(0)
-      nx.async(function()
-        local r = nx.await(nx.run({
+    btv.keymap.set("n", "<leader>fp", function()
+      local src = btv.buf.lines(0, 0, -1)
+      local ft, name = btv.bo[0].filetype, btv.buf.name(0)
+      btv.async(function()
+        local r = btv.await(btv.run({
           cmd = "prettier",
           args = { "--stdin-filepath", name },
           stdin = table.concat(src, "\n"),
         }))
         if r.code ~= 0 then
-          return nx.notify("prettier: " .. r.stderr, 4)
+          return btv.notify("prettier: " .. r.stderr, 4)
         end
-        local out = require("nxvim-diff.diff").to_lines(r.stdout)
-        require("nxvim-diff").open({
+        local out = require("bemtvi-diff.diff").to_lines(r.stdout)
+        require("bemtvi-diff").open({
           title = "format preview",
           panes = {
             { label = "buffer", lines = src, filetype = ft },
@@ -187,7 +187,7 @@ subprocess on the editor thread would freeze the UI anyway.
     end, { desc = "preview formatting as a diff" })
 <
 
-`require("nxvim-diff.diff").to_lines(text)` is the splitter every built-in
+`require("bemtvi-diff.diff").to_lines(text)` is the splitter every built-in
 source uses to turn a blob into pane `lines` (it drops the empty a trailing
 newline would otherwise produce, and nothing else) — reuse it so your pane
 agrees with the others about trailing newlines.
@@ -197,13 +197,13 @@ The bundled git and conflict support are themselves just clients of `open()`
 
 
 ==============================================================================
-6. Configuration                                    *nxvim-diff-configuration*
+6. Configuration                                    *bemtvi-diff-configuration*
 
-`require("nxvim-diff").setup({opts})` merges `{opts}` over the defaults
+`require("bemtvi-diff").setup({opts})` merges `{opts}` over the defaults
 (shown):
 
 >lua
-    require("nxvim-diff").setup({
+    require("bemtvi-diff").setup({
       sync_scroll = true,   -- lock the panes' viewports together (uses WinScrolled)
       sync_cursor = true,   -- keep the panes' cursor row aligned
       wrap = false,         -- soft-wrap in panes (off → columns align, leftcol syncs)
@@ -212,7 +212,7 @@ The bundled git and conflict support are themselves just clients of `open()`
       fillchar = "-",       -- glyph painted across a blank filler row ("" leaves it blank)
       layout = "auto",      -- "auto" | "vertical" (side by side) | "horizontal" (stacked)
       keymaps = { ... },    -- key -> action; false disables a key
-      highlights = { ... }, -- Diff* / NxDiff* group overrides
+      highlights = { ... }, -- Diff* / BtvDiff* group overrides
       on_attach = nil,      -- fn(session, api, bufnr) per pane buffer
     })
 <
@@ -236,7 +236,7 @@ input); the other built-ins are normal-mode.
 Highlights use the canonical `DiffAdd` / `DiffDelete` / `DiffChange` /
 `DiffText` groups, so a ported colorscheme themes the viewer unmodified; only a
 fallback is installed when a group is undefined. Plugin-private extras (the
-filler rule, the sign glyphs, the picked-line tint) live under the `NxDiff*`
+filler rule, the sign glyphs, the picked-line tint) live under the `BtvDiff*`
 namespace.
 
 The three line groups are painted as the editor's full-width line background
@@ -257,7 +257,7 @@ or `""` leaves the row blank. Both ride core extmark decorations (`sign_text` /
 
 
 ==============================================================================
-7. Conflict resolution                        *nxvim-diff-conflict-resolution*
+7. Conflict resolution                        *bemtvi-diff-conflict-resolution*
 
 `:DiffConflict` opens the WHOLE file as a 3-way (or 2-way) diff with every
 conflict shown in context — the reconstructed ours/base/theirs sides differ
@@ -265,7 +265,7 @@ only where the conflicts are, so `]c` / `[c` step from one to the next.
 
 Every resolve map acts on the conflict UNDER THE CURSOR: its marker block
 (`<<<<<<<` … `>>>>>>>`) is replaced in the live buffer via the editor's
-`nx.buf.set_lines`, as one undoable edit, and the diff closes so you land back
+`btv.buf.set_lines`, as one undoable edit, and the diff closes so you land back
 on the file (`:w` to save). Each conflict knows the alignment rows it occupies,
 so the cursor picks which one is resolved; when the cursor sits on shared
 context between conflicts, the nearest is chosen. Every write is guarded — if
@@ -298,7 +298,7 @@ Picks are per-conflict and last only for the current diff session.
 
 
 ==============================================================================
-8. Performance                                        *nxvim-diff-performance*
+8. Performance                                        *bemtvi-diff-performance*
 
 The editor must never freeze on a diff, so both LCS passes — the line diff
 and the per-line character diff behind `inline` — are bounded the same way:

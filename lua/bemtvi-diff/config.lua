@@ -1,6 +1,6 @@
--- nxvim-diff.config — the default configuration and the merge used by setup().
+-- bemtvi-diff.config — the default configuration and the merge used by setup().
 --
--- Pure data + validation, no editor calls (mirrors nxvim-tree.config), so it is
+-- Pure data + validation, no editor calls (mirrors bemtvi-tree.config), so it is
 -- trivially testable and the same table drives both the live plugin and the tests.
 -- `defaults()` hands out a fresh deep copy each call; `merge(into, opts)` deep-merges
 -- a user table over it and validates the closed-domain values, failing loud on a typo
@@ -101,26 +101,26 @@ end
 -- caller). Called by merge after the merge, so it sees the effective config.
 local function validate(cfg)
   if not LAYOUTS[cfg.layout] then
-    error("nxvim-diff: layout must be 'auto', 'vertical', or 'horizontal'", 3)
+    error("bemtvi-diff: layout must be 'auto', 'vertical', or 'horizontal'", 3)
   end
   for _, key in ipairs({ "sync_scroll", "sync_cursor", "wrap", "inline", "signs" }) do
     if type(cfg[key]) ~= "boolean" then
-      error(("nxvim-diff: %s must be a boolean"):format(key), 3)
+      error(("bemtvi-diff: %s must be a boolean"):format(key), 3)
     end
   end
   if type(cfg.fillchar) ~= "string" then
-    error("nxvim-diff: fillchar must be a string", 3)
+    error("bemtvi-diff: fillchar must be a string", 3)
   end
   -- The view layer calls `on_attach` only when it IS a function, so a misspelled or
   -- wrong-typed value would otherwise be dropped without a word — the hook simply never
   -- runs and the user hunts a phantom bug. Reject it here instead.
   if cfg.on_attach ~= nil and type(cfg.on_attach) ~= "function" then
-    error("nxvim-diff: on_attach must be a function (or nil)", 3)
+    error("bemtvi-diff: on_attach must be a function (or nil)", 3)
   end
   for key, action in pairs(cfg.keymaps) do
     if action ~= false and type(action) ~= "function" and not M.ACTIONS[action] then
       error(
-        ("nxvim-diff: keymap %q → unknown action %q (see config.ACTIONS)"):format(
+        ("bemtvi-diff: keymap %q → unknown action %q (see config.ACTIONS)"):format(
           tostring(key),
           tostring(action)
         ),
@@ -138,7 +138,7 @@ end
 function M.merge(into, opts)
   opts = opts or {}
   if type(opts) ~= "table" then
-    error("nxvim-diff.setup: opts must be a table", 3)
+    error("bemtvi-diff.setup: opts must be a table", 3)
   end
   for k, v in pairs(opts) do
     if (k == "keymaps" or k == "highlights") and type(v) == "table" then

@@ -1,13 +1,13 @@
 -- Live 3-way (diff3) rendering test (Phase 6): drives the real editor — opens a 3-pane
 -- diff (ours | base | theirs) via the public open() API and asserts the panes are laid
 -- out side by side and center-anchored against the middle (base) pane, with the changed
--- cells tinted. Run with `nxvim --test-plugin`.
+-- cells tinted. Run with `bemtvi --test-plugin`.
 
-local diff = require("nxvim-diff")
-local conflict = require("nxvim-diff.conflict")
+local diff = require("bemtvi-diff")
+local conflict = require("bemtvi-diff.conflict")
 
 local function await_ready()
-  nx.await(nx.wait_for(function()
+  btv.await(btv.wait_for(function()
     local s = diff.session()
     return s and s._ready
   end, { tries = 200, interval = 5, message = "diff never became ready" }))
@@ -17,7 +17,7 @@ end
 -- The marks on `row` (0-based) of `pane` whose details satisfy `pred`.
 local function marks_where(pane, s, row, pred)
   local out = {}
-  for _, m in ipairs(nx.buf.extmarks(pane.view:bufnr(), s.ns, 0, -1, { details = true })) do
+  for _, m in ipairs(btv.buf.extmarks(pane.view:bufnr(), s.ns, 0, -1, { details = true })) do
     if m[2] == row and pred(m[4] or {}) then
       out[#out + 1] = m
     end
@@ -26,18 +26,18 @@ local function marks_where(pane, s, row, pred)
 end
 
 local function pane_lines(pane)
-  return table.concat(nx.buf.lines(pane.view:bufnr(), 0, -1), "|")
+  return table.concat(btv.buf.lines(pane.view:bufnr(), 0, -1), "|")
 end
 
-nx.test.describe("nxvim-diff 3-way render", function()
-  nx.test.before_each(function()
-    require("nxvim-diff").setup({})
+btv.test.describe("bemtvi-diff 3-way render", function()
+  btv.test.before_each(function()
+    require("bemtvi-diff").setup({})
   end)
-  nx.test.after_each(function()
+  btv.test.after_each(function()
     diff.close()
   end)
 
-  nx.test.it("lays out three panes, center-anchored on the base", function()
+  btv.test.it("lays out three panes, center-anchored on the base", function()
     -- base a,b,c ; ours changes b ; theirs changes c.
     diff.open({
       panes = {
@@ -47,18 +47,18 @@ nx.test.describe("nxvim-diff 3-way render", function()
       },
     })
     local s = await_ready()
-    nx.test.expect(#s.panes).to_be(3)
+    btv.test.expect(#s.panes).to_be(3)
     -- ONLY those three windows in the diff's own tab (the new tab's empty window was
-    -- dropped). Count the CURRENT tab's windows; nx.win.list spans every tab and would
+    -- dropped). Count the CURRENT tab's windows; btv.win.list spans every tab and would
     -- also count the original tab's window we opened the diff from.
-    nx.test.expect(#nx.tabpage.wins()).to_be(3)
+    btv.test.expect(#btv.tabpage.wins()).to_be(3)
     -- every pane projected to the same height, aligned on the base rows
-    nx.test.expect(pane_lines(s.panes[1])).to_be("a|B|c")
-    nx.test.expect(pane_lines(s.panes[2])).to_be("a|b|c")
-    nx.test.expect(pane_lines(s.panes[3])).to_be("a|b|C")
+    btv.test.expect(pane_lines(s.panes[1])).to_be("a|B|c")
+    btv.test.expect(pane_lines(s.panes[2])).to_be("a|b|c")
+    btv.test.expect(pane_lines(s.panes[3])).to_be("a|b|C")
   end)
 
-  nx.test.it("tints each side's change and fills opposite an insertion", function()
+  btv.test.it("tints each side's change and fills opposite an insertion", function()
     -- ours appends z ; theirs deletes the leading x.
     diff.open({
       panes = {
@@ -69,21 +69,21 @@ nx.test.describe("nxvim-diff 3-way render", function()
     })
     local s = await_ready()
     -- center-anchored: base shows x,y then a filler opposite ours' inserted z
-    nx.test.expect(pane_lines(s.panes[2])).to_be("x|y|") -- filler is the blank
-    nx.test.expect(pane_lines(s.panes[3])).to_be("|y|") -- theirs dropped x, never had z
+    btv.test.expect(pane_lines(s.panes[2])).to_be("x|y|") -- filler is the blank
+    btv.test.expect(pane_lines(s.panes[3])).to_be("|y|") -- theirs dropped x, never had z
     -- ours' inserted z (row 2, 0-based) tinted DiffAdd
     local add = marks_where(s.panes[1], s, 2, function(d)
       return d.line_hl_group == "DiffAdd"
     end)
-    nx.test.expect(#add).to_be(1)
+    btv.test.expect(#add).to_be(1)
     -- the base line ours/theirs disagree on (x, row 0) is tinted DiffChange on the base pane
     local chg = marks_where(s.panes[2], s, 0, function(d)
       return d.line_hl_group == "DiffChange"
     end)
-    nx.test.expect(#chg).to_be(1)
+    btv.test.expect(#chg).to_be(1)
   end)
 
-  nx.test.it("renders a diff3 conflict spec as a 3-way diff", function()
+  btv.test.it("renders a diff3 conflict spec as a 3-way diff", function()
     local spec = conflict.spec({
       "common top",
       "<<<<<<< HEAD",
@@ -95,12 +95,12 @@ nx.test.describe("nxvim-diff 3-way render", function()
       ">>>>>>> branch",
       "common bottom",
     }, "f.txt")
-    nx.test.expect(#spec.panes).to_be(3)
+    btv.test.expect(#spec.panes).to_be(3)
     diff.open(spec)
     local s = await_ready()
-    nx.test.expect(#s.panes).to_be(3)
-    nx.test.expect(pane_lines(s.panes[1])).to_be("common top|ours line|common bottom")
-    nx.test.expect(pane_lines(s.panes[2])).to_be("common top|base line|common bottom")
-    nx.test.expect(pane_lines(s.panes[3])).to_be("common top|theirs line|common bottom")
+    btv.test.expect(#s.panes).to_be(3)
+    btv.test.expect(pane_lines(s.panes[1])).to_be("common top|ours line|common bottom")
+    btv.test.expect(pane_lines(s.panes[2])).to_be("common top|base line|common bottom")
+    btv.test.expect(pane_lines(s.panes[3])).to_be("common top|theirs line|common bottom")
   end)
 end)

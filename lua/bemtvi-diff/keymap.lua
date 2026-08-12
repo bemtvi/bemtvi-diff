@@ -1,4 +1,4 @@
--- nxvim-diff.keymap — install the configured bindings on every diff pane buffer.
+-- bemtvi-diff.keymap — install the configured bindings on every diff pane buffer.
 --
 -- `cfg.keymaps` is a `key -> action` table (defaults in config.lua). Each value is:
 --   a string   the name of a built-in nav action (see nav.lua / config.ACTIONS)
@@ -6,9 +6,9 @@
 --   false      disable this key (drop a default without redeclaring the table)
 --
 -- Every binding is buffer-local on each pane's view buffer and runs inside `api.run`
--- (the async, error-surfacing wrapper), so an action may freely nx.await.
+-- (the async, error-surfacing wrapper), so an action may freely btv.await.
 
-local nav = require("nxvim-diff.nav")
+local nav = require("bemtvi-diff.nav")
 
 local M = {}
 
@@ -25,7 +25,7 @@ function M.install(session, api)
           else
             fn, name = nav[action], action
             if not fn then
-              nx.notify("nxvim-diff: no built-in action '" .. tostring(action) .. "'", 4)
+              btv.notify("bemtvi-diff: no built-in action '" .. tostring(action) .. "'", 4)
             end
           end
           if fn then
@@ -37,11 +37,11 @@ function M.install(session, api)
               modes[#modes + 1] = "x"
             end
             for _, mode in ipairs(modes) do
-              nx.keymap.set(mode, key, function()
+              btv.keymap.set(mode, key, function()
                 api.run(function()
                   fn(session, api)
                 end)
-              end, { buffer = buf, desc = "nxvim-diff: " .. name })
+              end, { buffer = buf, desc = "bemtvi-diff: " .. name })
             end
           end
         end

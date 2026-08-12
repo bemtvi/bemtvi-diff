@@ -1,14 +1,14 @@
--- nxvim-diff.git — build a spec comparing the current file's working tree against its
+-- bemtvi-diff.git — build a spec comparing the current file's working tree against its
 -- git HEAD (the `:DiffGit` backing). Deliberately minimal: HEAD only. Anything
 -- fancier (an arbitrary revision, the index, rev..rev) is left to a caller building
--- its own spec and calling `require("nxvim-diff").open(spec)` directly — the Lua API
+-- its own spec and calling `require("bemtvi-diff").open(spec)` directly — the Lua API
 -- is the extension point, not a pile of command flags.
 --
 -- This is itself an ordinary client of the public API: it gathers content with the
--- async, promise-returning `nx.git.*` and returns a spec; init.lua awaits it and calls
+-- async, promise-returning `btv.git.*` and returns a spec; init.lua awaits it and calls
 -- open(). The spec carries a `reload` hook, so `refresh` (`R`) re-reads HEAD.
 
-local diff = require("nxvim-diff.diff")
+local diff = require("bemtvi-diff.diff")
 
 local M = {}
 
@@ -38,23 +38,23 @@ end
 -- { file = <abs path>, bufnr = <n>, cwd = <file's dir> } (the shape init.lua builds).
 --
 -- Failures reject with a bare, position-free message (`error(msg, 0)`): the `:DiffGit`
--- path's `run` wrapper adds the single "nxvim-diff: " prefix and notifies, so prefixing
+-- path's `run` wrapper adds the single "bemtvi-diff: " prefix and notifies, so prefixing
 -- here too (or letting Lua tack on a "git.lua:NN:" prefix) would double up.
 function M.head_spec(ctx)
-  return nx.async(function()
+  return btv.async(function()
     if ctx.file == nil or ctx.file == "" then
       error("this buffer has no file to diff", 0)
     end
 
-    -- The file's HEAD blob via the native `nx.git.show` (replaces `git rev-parse
+    -- The file's HEAD blob via the native `btv.git.show` (replaces `git rev-parse
     -- --show-prefix` + `git show HEAD:<rel>`). It discovers the repo from the file and
     -- computes the repo-relative path ITSELF — symlink-safe (the reason the old code did
     -- the `--show-prefix` dance), so the plugin no longer touches path math. A path
     -- outside any repo rejects `ENOREPO`; a file with no HEAD version (new / untracked,
     -- empty repo) rejects `ENOENT`. Both map to the same bare, position-free messages the
-    -- `:DiffGit` wrapper adds its single "nxvim-diff: " prefix to.
+    -- `:DiffGit` wrapper adds its single "bemtvi-diff: " prefix to.
     local rel = ctx.file:match("[^/]+$") or ctx.file
-    local ok, content = pcall(nx.await, nx.git.show(ctx.file, "HEAD"))
+    local ok, content = pcall(btv.await, btv.git.show(ctx.file, "HEAD"))
     if not ok then
       local code = type(content) == "table" and content.code or nil
       if code == "ENOREPO" then

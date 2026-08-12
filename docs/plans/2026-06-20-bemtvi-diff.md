@@ -1,16 +1,16 @@
-# nxvim-diff — phased implementation plan
+# bemtvi-diff — phased implementation plan
 
-A Meld-style side-by-side (and 3-way) diff viewer for nxvim, built as a **renderer you
+A Meld-style side-by-side (and 3-way) diff viewer for bemtvi, built as a **renderer you
 feed a diff to**, not a git tool. The core renders + navigates a diff; where the sides
 come from is the caller's business. The public Lua entry point —
-`require("nxvim-diff").open(spec)` — is how *any* plugin (a git integration, an
+`require("bemtvi-diff").open(spec)` — is how *any* plugin (a git integration, an
 LSP-rename preview, a formatter preview) sends a diff for preview.
 
 Only two things are exposed as `:commands`; everything else is the Lua API (command
 flags for the long tail aren't worth the friction):
 
-- **`:NxDiffGit`** — diff the current file's working tree against git **HEAD**.
-- **`:NxDiffConflict`** — if the current file has git conflict markers, open them as a
+- **`:BtvDiffGit`** — diff the current file's working tree against git **HEAD**.
+- **`:BtvDiffConflict`** — if the current file has git conflict markers, open them as a
   3-way (diff3 style) / 2-way (plain merge style) diff.
 
 Both are thin wrappers over the Lua API, so the bundled git/conflict support is itself
@@ -19,44 +19,44 @@ just a client of `open()`.
 ## Architecture at a glance
 
 ```
-:NxDiffGit ─► git.head_spec(ctx) ──┐   (nx.run: git show HEAD:file)
-:NxDiffConflict ─► conflict.spec(lines) ┤  (pure: parse markers → sides)
+:BtvDiffGit ─► git.head_spec(ctx) ──┐   (btv.run: git show HEAD:file)
+:BtvDiffConflict ─► conflict.spec(lines) ┤  (pure: parse markers → sides)
 any plugin ─────────────────────────────┴─► open(spec) ─ validate ─► view.open
                                                                         │
-   diff.compute → rows/hunks ; panes (nx.view) ; extmark tints + virt_line
-   fillers ; nav + keymap + scroll/cursor sync (WinScrolled + nx.win.set_*)
+   diff.compute → rows/hunks ; panes (btv.view) ; extmark tints + virt_line
+   fillers ; nav + keymap + scroll/cursor sync (WinScrolled + btv.win.set_*)
 ```
 
 Module map: `config` (data+validate), `diff` (pure engine), `conflict` (pure marker
-parser), `git` (HEAD spec via nx.run), `highlights` (Diff* palette), `view`
+parser), `git` (HEAD spec via btv.run), `highlights` (Diff* palette), `view`
 (panes/layout/paint), `nav` (hunk motions + sync), `keymap`. One concern each.
 
 ### Editor primitives it depends on
 
-The companion nxvim core change (committed in the editor repo) added the seam the sync
+The companion bemtvi core change (committed in the editor repo) added the seam the sync
 layer needs:
 
 - **`WinScrolled`** autocmd — per-window on `topline`/`leftcol` change (gated on a
   handler).
-- **`nx.win.set_topline` / `set_leftcol` / `set_cursor` / `restview`** — explicit-window
-  setters that work from inside `nx.win.call`.
-- **`nx.view:mount({ tab = true })`** — mount a view as the sole window of a fresh tab
+- **`btv.win.set_topline` / `set_leftcol` / `set_cursor` / `restview`** — explicit-window
+  setters that work from inside `btv.win.call`.
+- **`btv.view:mount({ tab = true })`** — mount a view as the sole window of a fresh tab
   (no split, no leftover empty window; closing it closes the tab). Added so the diff
   lays out its panes in one deterministic tick (`A:mount{tab}` + `B:mount{split}`,
   both view-ops) instead of a `tabnew`/split/`:only` cross-tick dance.
-- **`nx.buf.search(buf, pattern, opts)`** — native buffer search over the mirror
-  (plain / pcre / vim engines, start position, captures). `:NxDiffConflict` uses it to
+- **`btv.buf.search(buf, pattern, opts)`** — native buffer search over the mirror
+  (plain / pcre / vim engines, start position, captures). `:BtvDiffConflict` uses it to
   locate the conflict region (start marker → end marker) instead of scanning lines in
   Lua, then parses only the block between.
 
-Plus: `nx.view`, extmarks with `virt_lines` + `hl_group`, `nx.run`, `nx.fs`,
-`nx.async`/`await`, `nx.layer`, `nx.command`, `nx.keymap.set`, `nx.hl.define`.
+Plus: `btv.view`, extmarks with `virt_lines` + `hl_group`, `btv.run`, `btv.fs`,
+`btv.async`/`await`, `btv.layer`, `btv.command`, `btv.keymap.set`, `btv.hl.define`.
 
 ---
 
 ## Phase 0 — Scaffold ✅ (done)
 
-Repo skeleton under `~/work/nxvim-plugins/nxvim-diff`, matching the sibling plugins.
+Repo skeleton under `~/work/bemtvi-plugins/bemtvi-diff`, matching the sibling plugins.
 
 ## Phase 1 — Pure cores ✅ (done)
 
@@ -77,7 +77,7 @@ Repo skeleton under `~/work/nxvim-plugins/nxvim-diff`, matching the sibling plug
 content resolution (`lines`/`buf`/`path`), `diff.compute` + `project`, a dedicated tab
 laid out side-by-side (built across ticks so the ex-cmd/view-op ordering is
 deterministic; the new tab's empty window is dropped with `:only`), each read-only side
-an `nx.view` set to the projected lines (filler → blank row), whole-line
+an `btv.view` set to the projected lines (filler → blank row), whole-line
 DiffAdd/DiffDelete/DiffChange tints via `set_decor`, `nowrap`, and `keymap.install`.
 `close()` is a `:tabclose` + `view:close()`. The session exposes `cursor_row`/`goto_row`
 (basic, pre-sync) and `reopen`. Live-verified in `test/render_spec.lua` (layout, clean
@@ -87,18 +87,18 @@ later phases: visible `fillchar` on filler rows (Phase 4), 3-way (Phase 6).
 Original step list (for reference):
 
 1. **Content resolution** — `pane.lines` as-is; `pane.buf` → `nvim_buf_get_lines`;
-   `pane.path` → `nx.await(nx.fs.read)` split on `\n`.
-2. **Layout** — open a dedicated `nx.layer`/tab, vsplit into N panes per
+   `pane.path` → `btv.await(btv.fs.read)` split on `\n`.
+2. **Layout** — open a dedicated `btv.layer`/tab, vsplit into N panes per
    `config.layout`; `nowrap` unless `config.wrap`.
-3. **Panes** — each read-only side is an `nx.view`; set its lines from
+3. **Panes** — each read-only side is an `btv.view`; set its lines from
    `diff.project(rows, side)`, a `filler` entry rendered as a blank/`fillchar` row.
 4. **Paint** — extmarks: whole-line `DiffAdd`/`DiffDelete`/`DiffChange` tints
-   (`highlights.hl_for`) + `NxDiffFiller` on fillers; `virt_lines` where a side needs
+   (`highlights.hl_for`) + `BtvDiffFiller` on fillers; `virt_lines` where a side needs
    height beyond its real lines.
 5. **Session** — return the documented handle (`rows`, `hunks`, `panes`, `goto_row`,
    `cursor_row`, `reopen`, `_detach`, `_layer_close`); wire `keymap.install`.
 
-- **Acceptance:** the `<leader>du` caps demo (examples) and `:NxDiffGit` on a changed
+- **Acceptance:** the `<leader>du` caps demo (examples) and `:BtvDiffGit` on a changed
   tracked file render side-by-side, tinted, aligned.
 
 ## Phase 3 — Scroll & cursor sync ✅ (done)
@@ -107,9 +107,9 @@ Original step list (for reference):
 `sync_cursor`, dropped by `session._detach` on close):
 
 - **`WinScrolled`** — when a pane scrolls, copy its `topline` (and `leftcol`, unless
-  `config.wrap`) onto the other panes via `nx.win.set_topline` / `set_leftcol`.
+  `config.wrap`) onto the other panes via `btv.win.set_topline` / `set_leftcol`.
 - **`CursorMoved`** — when the focused pane's cursor moves, mirror its line onto the
-  others via `nx.win.set_cursor`. Because the projection is 1:1 (a pane's view line
+  others via `btv.win.set_cursor`. Because the projection is 1:1 (a pane's view line
   number IS the alignment row, fillers included), the aligned cursor is just the same
   line on every pane — no cross-filler remapping needed.
 
@@ -126,7 +126,7 @@ mirrors, `sync_scroll = false` lets the panes scroll independently, and `close()
 detaches the autocmds (a later scroll is inert). `view.lua` calls `attach_sync` from
 `finish()` after the panes mount.
 
-**Smooth scrolling.** nxvim animates viewport scrolls (`'scrollanim'`), but only the
+**Smooth scrolling.** bemtvi animates viewport scrolls (`'scrollanim'`), but only the
 *focused* window animates — and a synced pane is moved with a crisp `set_topline`. So a
 scroll would slide the focused pane while the others snap to the destination: a visible
 desync. Rather than work around it, this needed a core change (made in the editor repo):
@@ -153,7 +153,7 @@ panes" case, plus the editor repo's `window_local_scrollanim_*` rendering tests.
   `diff_spec` (the pure spans, incl. the multibyte case) and `decor_spec` (the rendered
   extmarks + `inline = false`).
 - **Signs — LANDED** (was deferred; the core gained the capability, see
-  `docs/plans/2026-06-21-extmark-signs-and-fillchar.md` in the editor repo). nxvim's
+  `docs/plans/2026-06-21-extmark-signs-and-fillchar.md` in the editor repo). bemtvi's
   `VirtDecor` now carries `sign_text` / `sign_hl_group`, projects them into the sign
   column (merged with diagnostic signs), and round-trips them through the extmark mirror.
   `config.signs` (opt-in, default `false`) places a `+`/`~`/`-` gutter sign on each
@@ -162,7 +162,7 @@ panes" case, plus the editor repo's `window_local_scrollanim_*` rendering tests.
 
 ## Phase 5 — git polish ✅ (done)
 
-`:NxDiffGit` is HEAD-only by design. Verifying the error paths surfaced a real bug, not
+`:BtvDiffGit` is HEAD-only by design. Verifying the error paths surfaced a real bug, not
 just wording:
 
 - **git ran in the wrong directory.** `git_head` passed `cwd = getcwd()` (the editor's
@@ -175,8 +175,8 @@ just wording:
   scratch buffer looked like a real file. Now gated on `expand("%") ~= ""`.
 - **Clean messages.** `head_spec` rejects with bare, position-free strings
   (`error(msg, 0)`): "not a git repository" / "this buffer has no file to diff" / "no
-  HEAD version of <rel>". The `:NxDiffGit` path's `run` wrapper adds the single
-  "nxvim-diff: " prefix, so there's no more `git.lua:NN: nxvim-diff: nxvim-diff: …`
+  HEAD version of <rel>". The `:BtvDiffGit` path's `run` wrapper adds the single
+  "bemtvi-diff: " prefix, so there's no more `git.lua:NN: bemtvi-diff: bemtvi-diff: …`
   double-prefix-with-position pile-up.
 
 Covered live in `test/git_spec.lua`: a real init'd repo (HEAD read via `head_spec`), plus
@@ -187,11 +187,11 @@ Lua-only: a caller builds a spec with `lines = git.to_lines(...)` and calls `ope
 > (1) `expand("%:p")` now returns `""` for a buffer with no file instead of resolving the
 > empty name against the cwd (so a scratch buffer no longer looks like a real file at
 > `<cwd>`), and (2) the per-convergence refresh now updates the Lua **current-buffer
-> snapshot** (`nx._cur_buf`), not just the content mirror — so `expand("%")` right after
+> snapshot** (`btv._cur_buf`), not just the content mirror — so `expand("%")` right after
 > `:edit` reads the file's name instead of a stale empty one. With those, `git_head` just
 > reads `expand("%:p")` and the tests `:edit` normally (no touch dance).
 
-## Phase 6 — 3-way diff / merge (`:NxDiffConflict` rendering) ✅ (choose_* deferred)
+## Phase 6 — 3-way diff / merge (`:BtvDiffConflict` rendering) ✅ (choose_* deferred)
 
 `conflict.spec` already yielded a 3-pane (diff3) / 2-pane (merge) spec; this phase makes
 `view.open` actually render the 3-pane case Meld-style.
@@ -224,14 +224,14 @@ Lua-only: a caller builds a spec with `lines = git.to_lines(...)` and calls `ope
   session. The two `config.ACTIONS` (default maps `co`/`ct`) drive `nav.choose_ours` /
   `nav.choose_theirs`, which — guarding that the recorded markers are still present —
   replace the marker block `[first-1, last)` with the chosen side and close the diff.
-  - **This needed a new editor primitive** (the deferral's real blocker): nxvim had *no*
-    buffer-text mutation API by design. Added **`nx.buf.set_lines`** (alias
+  - **This needed a new editor primitive** (the deferral's real blocker): bemtvi had *no*
+    buffer-text mutation API by design. Added **`btv.buf.set_lines`** (alias
     `nvim_buf_set_lines`) — an async, promise-returning whole-line write queued like every
     other effect (`BufOp::SetLines` → `Editor::api_set_lines`, one undoable group through
     the rope chokepoints), failing loud on a `nomodifiable`/read-only buffer; `vim.bo`
     gained a round-tripping `modifiable`. Covered by the editor repo's `buf_set_lines`
     suite and the plugin's `resolve_spec` (live: choose ours/theirs rewrites the buffer).
-  - **Whole-file conflict diffs + cursor→region resolve — DONE.** `:NxDiffConflict` now
+  - **Whole-file conflict diffs + cursor→region resolve — DONE.** `:BtvDiffConflict` now
     parses the WHOLE buffer (the reconstructed ours/base/theirs sides carry every conflict
     in context — they differ only at the conflicts, so `]c`/`[c` step between them).
     `conflict.parse` records each region's reconstructed-line span per side (`recon`);
@@ -243,8 +243,8 @@ Lua-only: a caller builds a spec with `lines = git.to_lines(...)` and calls `ope
 
 ## Phase 7 — Docs, perf ✅ (done)
 
-- **Help** — `doc/nxvim-diff.txt`, a vim-help-format manual surfaced by nxvim-help
-  (`:help nxvim-diff`). No `tags` file is shipped: nxvim-help auto-derives targets from
+- **Help** — `doc/bemtvi-diff.txt`, a vim-help-format manual surfaced by bemtvi-help
+  (`:help bemtvi-diff`). No `tags` file is shipped: bemtvi-help auto-derives targets from
   the `*anchor*`s (matching the sibling plugins), so the help works the moment the plugin
   is on the runtimepath. Covers the commands, the in-diff keys, the 3-way layout, the
   full Lua API, configuration (incl. the deferred `signs`/`fillchar`/`choose_*`), a
@@ -275,7 +275,7 @@ Lua-only: a caller builds a spec with `lines = git.to_lines(...)` and calls `ope
 ## The public Lua API (stable from Phase 0)
 
 ```lua
-local diff = require("nxvim-diff")
+local diff = require("bemtvi-diff")
 
 -- Preview any diff — the extension point a git/LSP/formatter plugin uses:
 diff.open({
@@ -286,8 +286,8 @@ diff.open({
   },
 })
 
-diff.git_head()   -- current file vs HEAD (also :NxDiffGit)
-diff.conflict()   -- parse this buffer's conflict markers (also :NxDiffConflict)
+diff.git_head()   -- current file vs HEAD (also :BtvDiffGit)
+diff.conflict()   -- parse this buffer's conflict markers (also :BtvDiffConflict)
 diff.close()
 ```
 

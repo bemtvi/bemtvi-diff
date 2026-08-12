@@ -1,4 +1,4 @@
--- nxvim-diff.conflict — parse git conflict markers out of a file into the two/three
+-- bemtvi-diff.conflict — parse git conflict markers out of a file into the two/three
 -- sides, and build a diff spec from them (the `:DiffConflict` backing).
 --
 -- Pure (no editor calls), so it is fully unit-tested. It reconstructs each FULL side
@@ -83,14 +83,14 @@ function M.parse(lines)
       -- conflicts, so this is a hand-mangled or half-resolved file. Swallowing it as
       -- content would silently produce sides that don't match the markers, and the
       -- resolve actions would then write those wrong lines back over the file.
-      error(("nxvim-diff: malformed conflict (nested <<<<<<< at line %d)"):format(i))
+      error(("bemtvi-diff: malformed conflict (nested <<<<<<< at line %d)"):format(i))
     elseif mode == "ours" then
       if is_base then
         mode, diff3 = "base", true
       elseif is_sep then
         mode = "theirs"
       elseif is_end then
-        error("nxvim-diff: malformed conflict (>>>>>>> before =======)")
+        error("bemtvi-diff: malformed conflict (>>>>>>> before =======)")
       else
         ours[#ours + 1] = line
         region.ours[#region.ours + 1] = line
@@ -99,7 +99,7 @@ function M.parse(lines)
       if is_sep then
         mode = "theirs"
       elseif is_end then
-        error("nxvim-diff: malformed conflict (>>>>>>> before =======)")
+        error("bemtvi-diff: malformed conflict (>>>>>>> before =======)")
       else
         base[#base + 1] = line
         region.base[#region.base + 1] = line
@@ -128,7 +128,7 @@ function M.parse(lines)
   end
 
   if mode ~= "common" then
-    error("nxvim-diff: unterminated conflict marker")
+    error("bemtvi-diff: unterminated conflict marker")
   end
 
   return {

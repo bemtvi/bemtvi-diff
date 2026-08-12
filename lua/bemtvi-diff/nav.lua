@@ -1,12 +1,12 @@
--- nxvim-diff.nav — hunk navigation (]c / [c …) and the pane-sync wiring.
+-- bemtvi-diff.nav — hunk navigation (]c / [c …) and the pane-sync wiring.
 --
 -- The navigation math is pure (it walks `session.hunks` against the active pane's
 -- alignment row) and drives the editor only through the session's `goto_row` method
--- and `nx.notify`, so it is ready now and exercised once view.lua builds a session.
+-- and `btv.notify`, so it is ready now and exercised once view.lua builds a session.
 --
 -- `attach_sync` (the WinScrolled-driven scroll/cursor mirror) keeps the panes' viewports
 -- and cursor row locked. It consumes the editor's `WinScrolled` / `CursorMoved` events
--- and the `nx.win.set_topline` / `set_leftcol` / `set_cursor` seam; see its own header.
+-- and the `btv.win.set_topline` / `set_leftcol` / `set_cursor` seam; see its own header.
 
 local M = {}
 
@@ -45,7 +45,7 @@ local function jump(session, h)
   if h then
     session:goto_row(h.first)
   else
-    nx.notify("nxvim-diff: no changes to navigate")
+    btv.notify("bemtvi-diff: no changes to navigate")
   end
 end
 
@@ -70,7 +70,7 @@ function M.refresh(session)
   if session.reopen then
     session.reopen()
   else
-    require("nxvim-diff").refresh()
+    require("bemtvi-diff").refresh()
   end
 end
 
@@ -111,13 +111,13 @@ end
 -- every resolve action so they agree on "which conflict" and on the failure notices.
 local function current_region(session)
   if not session.resolve then
-    nx.notify("nxvim-diff: not a conflict diff — nothing to resolve", 4)
+    btv.notify("bemtvi-diff: not a conflict diff — nothing to resolve", 4)
     return nil
   end
   -- Pick the conflict the cursor is in (or nearest); the diff shows them all at once.
   local region = region_at(session, session:cursor_row())
   if not region then
-    nx.notify("nxvim-diff: no conflict region to resolve", 4)
+    btv.notify("bemtvi-diff: no conflict region to resolve", 4)
   end
   return region
 end
@@ -125,7 +125,7 @@ end
 -- The diff pane that currently holds focus (falls back to the first pane). Picking lines
 -- reads from whichever side the cursor is in.
 local function focused_pane(session)
-  local cur = nx.win.current()
+  local cur = btv.win.current()
   for _, p in ipairs(session.panes) do
     if p.view:winid() == cur then
       return p
@@ -139,31 +139,31 @@ end
 -- notice. Guarded: if the recorded markers are no longer where we left them (the file
 -- changed under us), it aborts loud rather than corrupt the buffer.
 --
--- The write goes through the editor's one buffer-text mutation, `nx.buf.set_lines`. It
+-- The write goes through the editor's one buffer-text mutation, `btv.buf.set_lines`. It
 -- targets the conflicted buffer BY ID, so it doesn't matter that the diff panes hold
 -- focus; the diff is closed first only to return the user to their file.
 local function write_back(session, region, lines, label)
   local buf, first, last = session.resolve.buf, region.first, region.last
   -- Guard: the live buffer must still carry the markers where we recorded them, else
   -- these line numbers are stale and writing would corrupt the file — refuse loud.
-  local head = nx.buf.lines(buf, first - 1, first)[1] or ""
-  local tail = nx.buf.lines(buf, last - 1, last)[1] or ""
+  local head = btv.buf.lines(buf, first - 1, first)[1] or ""
+  local tail = btv.buf.lines(buf, last - 1, last)[1] or ""
   if not head:match("^<<<<<<<") or not tail:match("^>>>>>>>") then
-    nx.notify("nxvim-diff: the conflict markers moved or are gone — aborting resolve", 4)
+    btv.notify("bemtvi-diff: the conflict markers moved or are gone — aborting resolve", 4)
     return
   end
 
-  require("nxvim-diff").close()
+  require("bemtvi-diff").close()
   -- Replace [first-1, last) (0-based, end-exclusive) — the whole marker block — with the
   -- chosen lines. set_lines is async (the edit applies after this chunk); notify when it
   -- lands, and surface any refusal (a nomodifiable buffer) rather than failing silent.
-  nx.buf
+  btv.buf
     .set_lines(buf, first - 1, last, true, lines)
     :next(function()
-      nx.notify("nxvim-diff: resolved conflict using " .. label)
+      btv.notify("bemtvi-diff: resolved conflict using " .. label)
     end)
     :catch(function(e)
-      nx.notify("nxvim-diff: resolve failed: " .. tostring(e), 4)
+      btv.notify("bemtvi-diff: resolve failed: " .. tostring(e), 4)
     end)
 end
 
@@ -253,12 +253,12 @@ function M.pick_lines(session)
   if added == 0 then
     local why = skipped > 0 and "those lines aren't part of the conflict"
       or "no lines to pick here"
-    nx.notify("nxvim-diff: " .. why .. " — pick within the highlighted block", 4)
+    btv.notify("bemtvi-diff: " .. why .. " — pick within the highlighted block", 4)
     return
   end
   local extra = skipped > 0 and (" (skipped %d outside the conflict)"):format(skipped) or ""
-  nx.notify(
-    ("nxvim-diff: picked %d line(s) from %s (%d staged)%s"):format(
+  btv.notify(
+    ("bemtvi-diff: picked %d line(s) from %s (%d staged)%s"):format(
       added,
       pane.label or pane.side,
       #region.picks,
@@ -275,7 +275,7 @@ function M.apply_picked(session)
     return
   end
   if not (region.picks and #region.picks > 0) then
-    nx.notify("nxvim-diff: no lines picked yet — select lines and use pick_lines first", 4)
+    btv.notify("bemtvi-diff: no lines picked yet — select lines and use pick_lines first", 4)
     return
   end
   local lines = {}
@@ -294,7 +294,7 @@ function M.clear_picked(session)
   end
   region.picks = nil
   session:render_picks()
-  nx.notify("nxvim-diff: cleared picked lines")
+  btv.notify("bemtvi-diff: cleared picked lines")
 end
 
 -- The cursor→region mapper, exposed for tests (pure: reads region.rows + a row number).
@@ -305,7 +305,7 @@ M._region_at = region_at
 M.VISUAL_ACTIONS = { pick_lines = true }
 
 function M.close(_session)
-  require("nxvim-diff").close()
+  require("bemtvi-diff").close()
 end
 
 -- attach_sync(session) — keep the panes' viewports + cursor row locked together, the
@@ -313,9 +313,9 @@ end
 -- detach):
 --
 --   * `WinScrolled` — when one pane scrolls, copy its `topline` (and `leftcol`, unless
---     wrapping) onto the other panes via nx.win.set_topline / set_leftcol.
+--     wrapping) onto the other panes via btv.win.set_topline / set_leftcol.
 --   * `CursorMoved` — when the focused pane's cursor moves, mirror its line onto the
---     others via nx.win.set_cursor. The projection is 1:1 (a pane's view line number
+--     others via btv.win.set_cursor. The projection is 1:1 (a pane's view line number
 --     IS the alignment row, fillers included), so the aligned cursor is simply the
 --     same line on every pane — no cross-filler remapping needed.
 --
@@ -361,12 +361,12 @@ function M.attach_sync(session)
     local ok, err = pcall(body)
     session._syncing = false
     if not ok then
-      nx.notify("nxvim-diff: pane sync failed: " .. tostring(err), 3)
+      btv.notify("bemtvi-diff: pane sync failed: " .. tostring(err), 3)
     end
   end
 
   if session.config.sync_scroll then
-    ids[#ids + 1] = nx.autocmd.create("WinScrolled", {
+    ids[#ids + 1] = btv.autocmd.create("WinScrolled", {
       callback = function(args)
         if session._syncing then
           return
@@ -376,14 +376,14 @@ function M.attach_sync(session)
           return -- a scroll in some unrelated window — ignore
         end
         guarded(function()
-          local src = nx.win.call(win, nx.win.saveview)
+          local src = btv.win.call(win, btv.win.saveview)
           for _, w in ipairs(other_wins(win)) do
-            local cur = nx.win.call(w, nx.win.saveview)
+            local cur = btv.win.call(w, btv.win.saveview)
             if cur.topline ~= src.topline then
-              nx.win.set_topline(w, src.topline)
+              btv.win.set_topline(w, src.topline)
             end
             if not session.config.wrap and cur.leftcol ~= src.leftcol then
-              nx.win.set_leftcol(w, src.leftcol)
+              btv.win.set_leftcol(w, src.leftcol)
             end
           end
         end)
@@ -392,19 +392,19 @@ function M.attach_sync(session)
   end
 
   if session.config.sync_cursor then
-    ids[#ids + 1] = nx.autocmd.create("CursorMoved", {
+    ids[#ids + 1] = btv.autocmd.create("CursorMoved", {
       callback = function()
         if session._syncing then
           return
         end
-        local win = nx.win.current()
+        local win = btv.win.current()
         if not pane_for_win(win) then
           return
         end
         guarded(function()
           local row = session:cursor_row()
           for _, w in ipairs(other_wins(win)) do
-            nx.win.set_cursor(w, row)
+            btv.win.set_cursor(w, row)
           end
         end)
       end,
@@ -413,7 +413,7 @@ function M.attach_sync(session)
 
   session._detach = function()
     for _, id in ipairs(ids) do
-      pcall(nx.autocmd.del, id)
+      pcall(btv.autocmd.del, id)
     end
     session._detach = nil
   end

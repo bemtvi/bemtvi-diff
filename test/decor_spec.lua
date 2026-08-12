@@ -1,11 +1,11 @@
 -- Live decoration test (Phase 4): opens a diff with a changed line and asserts the
 -- extmarks the view paints — the whole-line tint and the intra-line `DiffText` spans —
--- land on the right rows with the right byte ranges. Run with `nxvim --test-plugin`.
+-- land on the right rows with the right byte ranges. Run with `bemtvi --test-plugin`.
 
-local diff = require("nxvim-diff")
+local diff = require("bemtvi-diff")
 
 local function await_ready()
-  nx.await(nx.wait_for(function()
+  btv.await(btv.wait_for(function()
     local s = diff.session()
     return s and s._ready
   end, { tries = 200, interval = 5, message = "diff never became ready" }))
@@ -14,7 +14,7 @@ end
 
 -- The session-namespace extmarks on a pane buffer, as { id, row, col, details } entries.
 local function marks(pane, s)
-  return nx.buf.extmarks(pane.view:bufnr(), s.ns, 0, -1, { details = true })
+  return btv.buf.extmarks(pane.view:bufnr(), s.ns, 0, -1, { details = true })
 end
 
 -- The marks on `row` (0-based) whose details satisfy `pred`.
@@ -39,26 +39,26 @@ local function open_change()
   return await_ready()
 end
 
-nx.test.describe("nxvim-diff decorations", function()
-  nx.test.before_each(function()
-    require("nxvim-diff").setup({})
+btv.test.describe("bemtvi-diff decorations", function()
+  btv.test.before_each(function()
+    require("bemtvi-diff").setup({})
   end)
-  nx.test.after_each(function()
+  btv.test.after_each(function()
     diff.close()
   end)
 
-  nx.test.it("tints the whole changed line with DiffChange", function()
+  btv.test.it("tints the whole changed line with DiffChange", function()
     local s = open_change()
     -- The tint is a full-width `line_hl_group` line background (vim's diff look), not a
     -- col..end_col span over the text.
     local tint = marks_where(s.panes[1], s, 1, function(d)
       return d.line_hl_group == "DiffChange"
     end)
-    nx.test.expect(#tint).to_be(1)
-    nx.test.expect(tint[1][3]).to_be(0) -- anchored at col 0
+    btv.test.expect(#tint).to_be(1)
+    btv.test.expect(tint[1][3]).to_be(0) -- anchored at col 0
   end)
 
-  nx.test.it("tints a changed line that is EMPTY (a range mark could not)", function()
+  btv.test.it("tints a changed line that is EMPTY (a range mark could not)", function()
     -- The regression guard for the old col..end_col tint: an added blank line has no text
     -- to span, so `end_col` was 0 — a zero-width mark that painted nothing, leaving a real
     -- insertion invisible. A line background has no such hole.
@@ -69,39 +69,39 @@ nx.test.describe("nxvim-diff decorations", function()
       },
     })
     local s = await_ready()
-    nx.test.expect(nx.buf.lines(s.panes[2].view:bufnr(), 1, 2)[1]).to_be("") -- row 1 is blank
+    btv.test.expect(btv.buf.lines(s.panes[2].view:bufnr(), 1, 2)[1]).to_be("") -- row 1 is blank
     local tint = marks_where(s.panes[2], s, 1, function(d)
       return d.line_hl_group == "DiffAdd"
     end)
-    nx.test.expect(#tint).to_be(1)
+    btv.test.expect(#tint).to_be(1)
   end)
 
-  nx.test.it("paints DiffText over only the changed characters", function()
+  btv.test.it("paints DiffText over only the changed characters", function()
     local s = open_change()
     -- "foo()" → "bar()": the first three bytes differ on both panes.
     for _, pane in ipairs(s.panes) do
       local text = marks_where(pane, s, 1, function(d)
         return d.hl_group == "DiffText"
       end)
-      nx.test.expect(#text).to_be(1)
-      nx.test.expect(text[1][3]).to_be(0) -- col 0
-      nx.test.expect(text[1][4].end_col).to_be(3) -- through byte 3 ("foo"/"bar")
-      nx.test.expect(text[1][4].priority > 100).to_be(true) -- above the line tint
+      btv.test.expect(#text).to_be(1)
+      btv.test.expect(text[1][3]).to_be(0) -- col 0
+      btv.test.expect(text[1][4].end_col).to_be(3) -- through byte 3 ("foo"/"bar")
+      btv.test.expect(text[1][4].priority > 100).to_be(true) -- above the line tint
     end
   end)
 
-  nx.test.it("inline = false suppresses the DiffText spans (line tint stays)", function()
-    require("nxvim-diff").setup({ inline = false })
+  btv.test.it("inline = false suppresses the DiffText spans (line tint stays)", function()
+    require("bemtvi-diff").setup({ inline = false })
     local s = open_change()
     local text = marks_where(s.panes[1], s, 1, function(d)
       return d.hl_group == "DiffText"
     end)
-    nx.test.expect(#text).to_be(0)
+    btv.test.expect(#text).to_be(0)
     -- The whole-line tint is unaffected.
     local tint = marks_where(s.panes[1], s, 1, function(d)
       return d.line_hl_group == "DiffChange"
     end)
-    nx.test.expect(#tint).to_be(1)
+    btv.test.expect(#tint).to_be(1)
   end)
 
   -- A change with an inserted line on the new side, so the old pane gets a filler row.
@@ -115,51 +115,51 @@ nx.test.describe("nxvim-diff decorations", function()
     return await_ready()
   end
 
-  nx.test.it("places a per-hunk gutter sign on changed rows when signs = true", function()
-    require("nxvim-diff").setup({ signs = true })
+  btv.test.it("places a per-hunk gutter sign on changed rows when signs = true", function()
+    require("bemtvi-diff").setup({ signs = true })
     local s = open_change() -- row 1 (0-based) is the foo()→bar() change on both panes
     for _, pane in ipairs(s.panes) do
       local sign = marks_where(pane, s, 1, function(d)
         return d.sign_text ~= nil
       end)
-      nx.test.expect(#sign).to_be(1)
-      nx.test.expect(sign[1][4].sign_text).to_be("~") -- `~` marks a changed line
-      nx.test.expect(sign[1][4].sign_hl_group).to_be("NxDiffSignChange")
+      btv.test.expect(#sign).to_be(1)
+      btv.test.expect(sign[1][4].sign_text).to_be("~") -- `~` marks a changed line
+      btv.test.expect(sign[1][4].sign_hl_group).to_be("BtvDiffSignChange")
     end
   end)
 
-  nx.test.it("signs default off — no sign_text marks", function()
+  btv.test.it("signs default off — no sign_text marks", function()
     local s = open_change() -- before_each setup({}) ⇒ signs = false
     local sign = marks_where(s.panes[1], s, 1, function(d)
       return d.sign_text ~= nil
     end)
-    nx.test.expect(#sign).to_be(0)
+    btv.test.expect(#sign).to_be(0)
   end)
 
-  nx.test.it("paints the fillchar across a filler (alignment) row", function()
-    require("nxvim-diff").setup({ fillchar = "-" })
+  btv.test.it("paints the fillchar across a filler (alignment) row", function()
+    require("bemtvi-diff").setup({ fillchar = "-" })
     local s = open_with_filler()
     -- The old pane's row 1 (0-based) is the filler opposite the inserted `extra`.
     local fill = marks_where(s.panes[1], s, 1, function(d)
       return d.line_fill ~= nil
     end)
-    nx.test.expect(#fill).to_be(1)
-    nx.test.expect(fill[1][4].line_fill.text).to_be("-")
-    nx.test.expect(fill[1][4].line_fill.hl_group).to_be("NxDiffFiller")
+    btv.test.expect(#fill).to_be(1)
+    btv.test.expect(fill[1][4].line_fill.text).to_be("-")
+    btv.test.expect(fill[1][4].line_fill.hl_group).to_be("BtvDiffFiller")
     -- A real (non-filler) row carries no fill.
-    nx.test
+    btv.test
       .expect(#marks_where(s.panes[1], s, 0, function(d)
         return d.line_fill ~= nil
       end))
       .to_be(0)
   end)
 
-  nx.test.it("fillchar = '' leaves filler rows blank (no line_fill mark)", function()
-    require("nxvim-diff").setup({ fillchar = "" })
+  btv.test.it("fillchar = '' leaves filler rows blank (no line_fill mark)", function()
+    require("bemtvi-diff").setup({ fillchar = "" })
     local s = open_with_filler()
     local fill = marks_where(s.panes[1], s, 1, function(d)
       return d.line_fill ~= nil
     end)
-    nx.test.expect(#fill).to_be(0)
+    btv.test.expect(#fill).to_be(0)
   end)
 end)

@@ -1,12 +1,12 @@
-# nxvim-diff
+# bemtvi-diff
 
 A Meld-style **side-by-side diff viewer** for
-[nxvim](https://github.com/davidrios/nxvim) — two (or three) panes locked together,
+[bemtvi](https://github.com/davidrios/bemtvi) — two (or three) panes locked together,
 changed/added/removed lines tinted, aligned with filler rows, navigable hunk-by-hunk.
 
-It is built entirely on the native `nx.*` plugin API (ADR 0002): the read-only sides
-are `nx.view` surfaces, every line tint and intra-line span is an extmark, and the panes
-stay in lockstep through the editor's `WinScrolled` event plus `nx.win.set_topline` /
+It is built entirely on the native `btv.*` plugin API (ADR 0002): the read-only sides
+are `btv.view` surfaces, every line tint and intra-line span is an extmark, and the panes
+stay in lockstep through the editor's `WinScrolled` event plus `btv.win.set_topline` /
 `set_leftcol` / `set_cursor`.
 
 It's a **renderer you feed a diff to**, not a git tool. The core knows how to render and
@@ -30,11 +30,11 @@ blank left row is the alignment filler opposite it.)
 Declare it with the built-in `:Plugins` manager, then `:PluginSync`:
 
 ```lua
-nx.plugins({
+btv.plugins({
   {
-    "davidrios/nxvim-diff",
+    "davidrios/bemtvi-diff",
     config = function()
-      require("nxvim-diff").setup({})
+      require("bemtvi-diff").setup({})
     end,
   },
 })
@@ -47,7 +47,7 @@ Two commands, by design:
 :DiffConflict   if the current file has conflict markers, open them as a 3-way diff
 ```
 
-Everything else is the Lua API — `require("nxvim-diff").open({ panes = {...} })` renders
+Everything else is the Lua API — `require("bemtvi-diff").open({ panes = {...} })` renders
 any 2- or 3-pane spec you build (git, LSP rename, formatter preview, …).
 
 ## Documentation
@@ -56,19 +56,19 @@ Full docs — the commands, in-diff navigation and conflict-resolution keys, the
 layout, the `open()` spec and the rest of the Lua API, `setup()` options, and the perf
 guards — live in the help file. The same source renders both on GitHub and in the editor:
 
-- In editor: `:help nxvim-diff`
-- On GitHub: [doc/nxvim-diff.md](./doc/nxvim-diff.md) (the help source)
+- In editor: `:help bemtvi-diff`
+- On GitHub: [doc/bemtvi-diff.md](./doc/bemtvi-diff.md) (the help source)
 
 ## Development
 
-A Lua test suite (`test/*_spec.lua`) runs on nxvim's native `nx.test` framework — pure
+A Lua test suite (`test/*_spec.lua`) runs on bemtvi's native `btv.test` framework — pure
 specs for the LCS diff engine (including its no-freeze cell caps), the conflict-marker
 parser, config/spec validation, and hunk navigation; live specs driving real 2- and 3-pane
 diffs, pane layout and focus, scroll/cursor sync, the line tints + `DiffText` spans,
 conflict resolution, and `:DiffGit`:
 
 ```sh
-nxvim --test-plugin .
+bemtvi --test-plugin .
 ```
 
 Lua is formatted with `stylua` (see `stylua.toml`):
@@ -77,7 +77,7 @@ Lua is formatted with `stylua` (see `stylua.toml`):
 stylua lua test examples
 ```
 
-The vimdoc `doc/nxvim-diff.txt` is **generated** from `doc/nxvim-diff.md` via
+The vimdoc `doc/bemtvi-diff.txt` is **generated** from `doc/bemtvi-diff.md` via
 [panvimdoc](https://github.com/kdheepak/panvimdoc): edit the `.md`, then run
 `bash scripts/gen-vimdoc.sh` (needs `pandoc` + `git`). Never edit the `.txt` by hand.
 

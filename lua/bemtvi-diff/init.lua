@@ -1,13 +1,13 @@
--- nxvim-diff — a Meld-style side-by-side (and 3-way) diff viewer for nxvim, built on
--- the native `nx.*` plugin API (ADR 0002): no buffer-mutation hacks. The "old" side
--- is a read-only `nx.view`; alignment fillers, line tints, and intra-line spans are
+-- bemtvi-diff — a Meld-style side-by-side (and 3-way) diff viewer for bemtvi, built on
+-- the native `btv.*` plugin API (ADR 0002): no buffer-mutation hacks. The "old" side
+-- is a read-only `btv.view`; alignment fillers, line tints, and intra-line spans are
 -- extmarks; the panes stay locked together via the `WinScrolled` event plus
--- `nx.win.set_topline` / `set_leftcol` / `set_cursor` (the editor's scrollbind seam).
+-- `btv.win.set_topline` / `set_leftcol` / `set_cursor` (the editor's scrollbind seam).
 --
 -- THE BIG IDEA — it's a *renderer* you feed a diff to, not a git tool. The public Lua
 -- entry point is:
 --
---   require("nxvim-diff").open({ panes = { {label=,lines=}, {label=,buf=} } })
+--   require("bemtvi-diff").open({ panes = { {label=,lines=}, {label=,buf=} } })
 --
 -- Any plugin (a git integration, an LSP-rename preview, a formatter preview) builds a
 -- spec and calls open() to show it. ONLY TWO things are exposed as :commands, because
@@ -23,14 +23,14 @@
 --   config.lua      defaults + validated merge
 --   diff.lua        the pure LCS line-diff engine (alignment + hunks + projection)
 --   conflict.lua    pure conflict-marker parser → sides → spec (:DiffConflict)
---   git.lua         build a working-tree-vs-HEAD spec via nx.git (:DiffGit)
+--   git.lua         build a working-tree-vs-HEAD spec via btv.git (:DiffGit)
 --   highlights.lua  the Diff* palette (fallback-applied)
 --   view.lua        spec → panes: create views, lay out the split, paint fillers/tints
 --   nav.lua         hunk navigation (]c / [c) + scroll / cursor sync
 --   keymap.lua      install the configured bindings on each pane buffer
 
-local config = require("nxvim-diff.config")
-local highlights = require("nxvim-diff.highlights")
+local config = require("bemtvi-diff.config")
+local highlights = require("bemtvi-diff.highlights")
 
 local M = {}
 
@@ -47,11 +47,11 @@ local hl_applied = false
 local generation = 0
 
 -- Run an async body, surfacing any rejection as a notification rather than an
--- unhandled promise error (the git source / view content reads nx.await promises).
+-- unhandled promise error (the git source / view content reads btv.await promises).
 local function run(body)
-  nx.async(body)():catch(function(e)
+  btv.async(body)():catch(function(e)
     local msg = type(e) == "table" and e.message or e
-    nx.notify("nxvim-diff: " .. tostring(msg), 4)
+    btv.notify("bemtvi-diff: " .. tostring(msg), 4)
   end)
 end
 M._run = run
@@ -66,19 +66,19 @@ M._run = run
 -- and each pane carries EXACTLY ONE content source:
 --   { lines = {<string>...} | buf = <bufnr> | path = <abs path>,
 --     label = <string?>, filetype = <string?> }
--- Every pane renders as a read-only `nx.view` snapshot of its content — a diff is a
+-- Every pane renders as a read-only `btv.view` snapshot of its content — a diff is a
 -- viewer, not an editing surface, so there is no per-pane writability to ask for.
 function M.validate_spec(spec)
   if type(spec) ~= "table" then
-    error("nxvim-diff: a diff spec must be a table", 2)
+    error("bemtvi-diff: a diff spec must be a table", 2)
   end
   local panes = spec.panes
   if type(panes) ~= "table" or (#panes ~= 2 and #panes ~= 3) then
-    error("nxvim-diff: spec.panes must hold 2 or 3 panes", 2)
+    error("bemtvi-diff: spec.panes must hold 2 or 3 panes", 2)
   end
   for idx, pane in ipairs(panes) do
     if type(pane) ~= "table" then
-      error(("nxvim-diff: pane %d must be a table"):format(idx), 2)
+      error(("bemtvi-diff: pane %d must be a table"):format(idx), 2)
     end
     local sources = 0
     for _, key in ipairs({ "lines", "buf", "path" }) do
@@ -88,7 +88,7 @@ function M.validate_spec(spec)
     end
     if sources ~= 1 then
       error(
-        ("nxvim-diff: pane %d needs exactly one of lines / buf / path (got %d)"):format(
+        ("bemtvi-diff: pane %d needs exactly one of lines / buf / path (got %d)"):format(
           idx,
           sources
         ),
@@ -96,7 +96,7 @@ function M.validate_spec(spec)
       )
     end
     if pane.lines ~= nil and type(pane.lines) ~= "table" then
-      error(("nxvim-diff: pane %d .lines must be an array of strings"):format(idx), 2)
+      error(("bemtvi-diff: pane %d .lines must be an array of strings"):format(idx), 2)
     end
   end
   return spec
@@ -112,11 +112,11 @@ function M.open(spec)
   M.close() -- also bumps `generation`, retiring any open still reading its content
   local mine = generation
   run(function()
-    local built = require("nxvim-diff.view").open(M, spec)
+    local built = require("bemtvi-diff.view").open(M, spec)
     if mine ~= generation then
       -- A newer open() (or a close()) landed while this one was reading its panes'
       -- content. Tear down what we just mounted rather than orphaning it on screen.
-      require("nxvim-diff.view").close(built)
+      require("bemtvi-diff.view").close(built)
       return
     end
     session = built
@@ -137,7 +137,7 @@ function M.git_head()
     cwd = (file ~= "" and vim.fn.fnamemodify(file, ":h")) or vim.fn.getcwd(),
   }
   run(function()
-    M.open(nx.await(require("nxvim-diff.git").head_spec(ctx)))
+    M.open(btv.await(require("bemtvi-diff.git").head_spec(ctx)))
   end)
 end
 
@@ -154,8 +154,8 @@ local function conflict_spec(buf)
   -- Stamp the conflicted buffer's own filetype on every reconstructed pane so each side
   -- gets the same syntax highlighting as the original file (mirrors git.head_spec).
   local ft = vim.bo[buf] and vim.bo[buf].filetype or nil
-  local name = (nx.buf.name(buf) or ""):match("[^/]+$")
-  local spec, reason = require("nxvim-diff.conflict").spec(nx.buf.lines(buf, 0, -1), name, ft)
+  local name = (btv.buf.name(buf) or ""):match("[^/]+$")
+  local spec, reason = require("bemtvi-diff.conflict").spec(btv.buf.lines(buf, 0, -1), name, ft)
   if not spec then
     return nil, reason
   end
@@ -175,25 +175,25 @@ end
 -- 3-way (diff3 style) or 2-way (plain merge style) diff, with every conflict shown in
 -- context. Backs :DiffConflict. A clean file just notifies.
 --
--- A cheap `nx.buf.search` for the start marker answers "is there a conflict?" before the
+-- A cheap `btv.buf.search` for the start marker answers "is there a conflict?" before the
 -- whole buffer is read (a clean file pays nothing); `conflict_spec` above does the rest.
 -- A malformed / unterminated marker makes it raise; that is caught and surfaced as a
 -- clean notification.
 function M.conflict()
   local buf = vim.api.nvim_get_current_buf()
-  if not nx.buf.search(buf, "^<<<<<<<", { engine = "vim" }) then
-    nx.notify("nxvim-diff: no conflict markers found")
+  if not btv.buf.search(buf, "^<<<<<<<", { engine = "vim" }) then
+    btv.notify("bemtvi-diff: no conflict markers found")
     return
   end
   local ok, spec, reason = pcall(conflict_spec, buf)
   if not ok then
     -- `spec` holds the raise (an unterminated / malformed marker); strip any position
     -- prefix so the notice reads cleanly.
-    nx.notify("nxvim-diff: " .. tostring(spec):gsub("^.-nxvim%-diff: ", ""), 4)
+    btv.notify("bemtvi-diff: " .. tostring(spec):gsub("^.-bemtvi%-diff: ", ""), 4)
     return
   end
   if not spec then
-    nx.notify("nxvim-diff: " .. reason)
+    btv.notify("bemtvi-diff: " .. reason)
     return
   end
   M.open(spec)
@@ -206,7 +206,7 @@ end
 function M.close()
   generation = generation + 1
   if session then
-    require("nxvim-diff.view").close(session)
+    require("bemtvi-diff.view").close(session)
     session = nil
   end
 end
@@ -233,12 +233,12 @@ function M.refresh()
     local next_spec, reason = reload()
     -- A promise (the git source is async) — await it for the spec.
     if type(next_spec) == "table" and type(next_spec.next) == "function" then
-      next_spec = nx.await(next_spec)
+      next_spec = btv.await(next_spec)
     end
     if type(next_spec) ~= "table" then
       -- The source has nothing to show any more (every conflict resolved, say). Say so
       -- and leave the current diff alone rather than tearing it down silently.
-      nx.notify("nxvim-diff: cannot refresh — " .. tostring(reason or "the source is gone"), 3)
+      btv.notify("bemtvi-diff: cannot refresh — " .. tostring(reason or "the source is gone"), 3)
       return
     end
     M.open(next_spec)
@@ -270,11 +270,11 @@ function M.setup(opts)
     session.config = M.config
   end
 
-  nx.command("DiffGit", function()
+  btv.command("DiffGit", function()
     M.git_head()
   end, { desc = "Diff the current file's working tree against git HEAD" })
 
-  nx.command("DiffConflict", function()
+  btv.command("DiffConflict", function()
     M.conflict()
   end, { desc = "Open the current file's git conflict markers as a 3-way diff" })
 

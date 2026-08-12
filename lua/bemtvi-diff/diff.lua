@@ -1,4 +1,4 @@
--- nxvim-diff.diff — the pure line-diff engine.
+-- bemtvi-diff.diff — the pure line-diff engine.
 --
 -- No editor calls: it takes two arrays of strings and returns an *alignment* — the
 -- row-by-row model a side-by-side viewer renders. Being pure, it is fully unit-tested
@@ -233,7 +233,7 @@ end
 -- panes get the same length, so corresponding lines sit on the same screen row — the
 -- fillers are what the view paints as alignment gaps (extmark virt_lines / fillchar).
 function M.project(rows, side)
-  assert(side == "a" or side == "b", "nxvim-diff.diff.project: side must be 'a' or 'b'")
+  assert(side == "a" or side == "b", "bemtvi-diff.diff.project: side must be 'a' or 'b'")
   local out = {}
   for _, r in ipairs(rows) do
     local idx = r[side]
@@ -344,7 +344,7 @@ end
 -- project3(rows, role) — the per-pane entry list for "ours" / "base" / "theirs", the
 -- same shape `project` yields for a 2-way side (so the view paints both uniformly).
 function M.project3(rows, role)
-  assert(ROLES[role], "nxvim-diff.diff.project3: role must be 'ours', 'base', or 'theirs'")
+  assert(ROLES[role], "bemtvi-diff.diff.project3: role must be 'ours', 'base', or 'theirs'")
   local out = {}
   for _, r in ipairs(rows) do
     local c = r.cells[role]

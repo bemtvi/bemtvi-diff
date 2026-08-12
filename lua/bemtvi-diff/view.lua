@@ -1,8 +1,8 @@
--- nxvim-diff.view — turn a validated spec into the on-screen panes, and tear them
+-- bemtvi-diff.view — turn a validated spec into the on-screen panes, and tear them
 -- down. The editor-integration heart; the only module that touches windows, views,
 -- and extmarks.
 --
--- Renders a 2-pane diff OR a 3-pane diff3 (Phase 6): the read-only sides are `nx.view`
+-- Renders a 2-pane diff OR a 3-pane diff3 (Phase 6): the read-only sides are `btv.view`
 -- surfaces laid out side by side in a dedicated tab, so closing the diff restores the
 -- user's layout untouched. In a 3-pane spec the MIDDLE pane is the common base and the
 -- outer two are center-anchored against it (see `build` / `diff.compute3`).
@@ -11,8 +11,8 @@
 -- page, no split, no leftover empty window — the core primitive added for this), and the
 -- remaining panes split beside (or, with `layout = "horizontal"`, below) it. Both are
 -- *view-ops* (one queue, drained in order), so the whole layout is one deterministic tick
--- — no `nx.cmd`, no `:only`. The view buffer/winid only exist a tick after the mount, so
--- decoration waits on `nx.wait_for(bufnr)`. Closing the tab-mounted pane closes the tab.
+-- — no `btv.cmd`, no `:only`. The view buffer/winid only exist a tick after the mount, so
+-- decoration waits on `btv.wait_for(bufnr)`. Closing the tab-mounted pane closes the tab.
 --
 -- ===== the session handle (what open returns) =====
 --   session = {
@@ -26,10 +26,10 @@
 --     reopen = function() end,                  -- re-run the source & re-render
 --   }
 
-local diff = require("nxvim-diff.diff")
-local highlights = require("nxvim-diff.highlights")
-local keymap = require("nxvim-diff.keymap")
-local nav = require("nxvim-diff.nav")
+local diff = require("bemtvi-diff.diff")
+local highlights = require("bemtvi-diff.highlights")
+local keymap = require("bemtvi-diff.keymap")
+local nav = require("bemtvi-diff.nav")
 
 local M = {}
 
@@ -55,10 +55,10 @@ local function resolve(pane)
     return pane.lines
   end
   if pane.buf then
-    return nx.buf.lines(pane.buf, 0, -1)
+    return btv.buf.lines(pane.buf, 0, -1)
   end
   if pane.path then
-    return diff.to_lines(nx.await(nx.fs.read_text(pane.path)))
+    return diff.to_lines(btv.await(btv.fs.read_text(pane.path)))
   end
   return {}
 end
@@ -88,10 +88,10 @@ local TEXT_PRIORITY = 200
 -- pane shows (an `add` row is real only on the added side, `del` only on the deleted
 -- side, `change` on both), so the kind maps straight to the glyph.
 local SIGN_GLYPH = { add = "+", change = "~", del = "-" }
-local SIGN_HL = { add = "NxDiffSignAdd", change = "NxDiffSignChange", del = "NxDiffSignDelete" }
+local SIGN_HL = { add = "BtvDiffSignAdd", change = "BtvDiffSignChange", del = "BtvDiffSignDelete" }
 
 -- The decoration drawn on a line the user has staged with `pick_lines` (see nav.lua): a
--- `▶` gutter sign plus an `NxDiffPick` line background. Both live in their own namespace so
+-- `▶` gutter sign plus an `BtvDiffPick` line background. Both live in their own namespace so
 -- they re-render on every pick/clear without touching the static diff decorations, and
 -- outrank the per-hunk layers (the sign shows over `~`, the tint over the conflict's own
 -- change background).
@@ -123,7 +123,7 @@ local function pane_marks(proj, config)
         marks[#marks + 1] = {
           line = line0,
           col = 0,
-          line_fill = { text = config.fillchar, hl_group = "NxDiffFiller" },
+          line_fill = { text = config.fillchar, hl_group = "BtvDiffFiller" },
           priority = LINE_PRIORITY,
         }
       end
@@ -168,14 +168,14 @@ end
 -- the per-window options below — `nowrap`, and especially `noscrollanim`, which the core
 -- defaults *on* — must reach a real window to take effect, so the gate waits for both.
 local function finish(session, api)
-  nx.wait_for(function()
+  btv.wait_for(function()
     for _, p in ipairs(session.panes) do
       if not p.view:bufnr() or not p.view:winid() then
         return false
       end
     end
     return true
-  end, { tries = 200, interval = 5, message = "nxvim-diff: panes never mounted" })
+  end, { tries = 200, interval = 5, message = "bemtvi-diff: panes never mounted" })
     :next(function()
       for _, p in ipairs(session.panes) do
         p.view:set_decor(session.ns, pane_marks(p.proj, session.config))
@@ -209,7 +209,7 @@ local function finish(session, api)
       session._ready = true
     end)
     :catch(function(e)
-      nx.notify("nxvim-diff: render failed: " .. tostring(e), 4)
+      btv.notify("bemtvi-diff: render failed: " .. tostring(e), 4)
     end)
 end
 
@@ -318,7 +318,7 @@ end
 -- open(root, spec) — build a session from a validated spec (see the contract above).
 function M.open(root, spec)
   if #spec.panes ~= 2 and #spec.panes ~= 3 then
-    error(("nxvim-diff: a diff needs 2 or 3 panes, got %d"):format(#spec.panes))
+    error(("bemtvi-diff: a diff needs 2 or 3 panes, got %d"):format(#spec.panes))
   end
 
   local contents = {}
@@ -334,7 +334,7 @@ function M.open(root, spec)
 
   local panes = {}
   for i, pane in ipairs(spec.panes) do
-    local v = nx.view.create({
+    local v = btv.view.create({
       -- The pane label IS the view's display name — it's what the statusline and the tab
       -- label now show (a view has no file path, so without a name it reads `[No Name]`),
       -- so each pane reads as its side ("ours" / "base" / "theirs" / "HEAD" / …).
@@ -363,10 +363,10 @@ function M.open(root, spec)
     title = spec.title,
     rows = result.rows,
     hunks = result.hunks,
-    ns = nx.ns.create("nxvim-diff"),
+    ns = btv.ns.create("bemtvi-diff"),
     -- A second namespace for the dynamic pick-line gutter signs, repainted on every
     -- pick/clear independently of the static diff decorations in `ns`.
-    pick_ns = nx.ns.create("nxvim-diff-picks"),
+    pick_ns = btv.ns.create("bemtvi-diff-picks"),
     panes = panes,
     -- The conflict write-back target (only a `:DiffConflict` spec carries it); the
     -- `choose_*` actions read it. Absent on a plain (non-conflict) diff.
@@ -378,7 +378,7 @@ function M.open(root, spec)
   -- The focused pane's current alignment row (projection is 1:1 with the rows, so the
   -- view line number IS the alignment row).
   function session:cursor_row()
-    local cur = nx.win.current()
+    local cur = btv.win.current()
     for _, p in ipairs(self.panes) do
       if p.view:winid() == cur then
         return p.view:line() or 1
@@ -395,7 +395,7 @@ function M.open(root, spec)
   -- hitting `]c` from the right-hand pane used to teleport you into the left one, which
   -- makes stepping through a diff from the side you're reading impossible.
   function session:goto_row(row)
-    local cur, keep = nx.win.current(), nil
+    local cur, keep = btv.win.current(), nil
     for _, p in ipairs(self.panes) do
       if p.view:winid() == cur then
         keep = p
@@ -425,7 +425,7 @@ function M.open(root, spec)
               line = line0,
               col = 0,
               sign_text = PICK_GLYPH,
-              sign_hl_group = "NxDiffSignPick",
+              sign_hl_group = "BtvDiffSignPick",
               priority = TEXT_PRIORITY,
             }
             -- The staged line's background, the same full-width `line_hl_group` layer the
@@ -434,7 +434,7 @@ function M.open(root, spec)
             marks[#marks + 1] = {
               line = line0,
               col = 0,
-              line_hl_group = "NxDiffPick",
+              line_hl_group = "BtvDiffPick",
               priority = PICK_PRIORITY,
             }
           end
