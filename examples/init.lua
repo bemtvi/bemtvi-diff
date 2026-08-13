@@ -26,7 +26,7 @@
 vim.g.mapleader = " "
 
 -- Load the plugin straight from this repo (a local-dev spec: `dir` is never cloned).
--- A real config would instead use `{ "davidrios/bemtvi-diff", config = ... }`.
+-- A real config would instead use `{ "bemtvi/bemtvi-diff", config = ... }`.
 btv.plugins({
   {
     name = "bemtvi-diff",

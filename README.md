@@ -1,7 +1,7 @@
 # bemtvi-diff
 
 A Meld-style **side-by-side diff viewer** for
-[bemtvi](https://github.com/davidrios/bemtvi) — two (or three) panes locked together,
+[bemtvi](https://github.com/bemtvi/bemtvi) — two (or three) panes locked together,
 changed/added/removed lines tinted, aligned with filler rows, navigable hunk-by-hunk.
 
 It is built entirely on the native `btv.*` plugin API (ADR 0002): the read-only sides
@@ -32,7 +32,7 @@ Declare it with the built-in `:Plugins` manager, then `:PluginSync`:
 ```lua
 btv.plugins({
   {
-    "davidrios/bemtvi-diff",
+    "bemtvi/bemtvi-diff",
     config = function()
       require("bemtvi-diff").setup({})
     end,
