@@ -1,23 +1,23 @@
-*bemtvi-diff.txt*   A Meld-style side-by-side (and 3-way) diff viewer for bemtvi
+*bemtvi-diff.txt* A Meld-style side-by-side (and 3-way) diff viewer for bemtvi
 
 ==============================================================================
-Table of Contents                               *bemtvi-diff-table-of-contents*
+Table of Contents                              *bemtvi-diff-table-of-contents*
 
-1. Commands                                              |bemtvi-diff-commands|
-2. Usage                                                    |bemtvi-diff-usage|
-3. Three-way layout                              |bemtvi-diff-three-way-layout|
-4. The Lua API                                        |bemtvi-diff-the-lua-api|
-5. Extending                                            |bemtvi-diff-extending|
-6. Configuration                                    |bemtvi-diff-configuration|
-7. Conflict resolution                        |bemtvi-diff-conflict-resolution|
-8. Performance                                        |bemtvi-diff-performance|
+1. Commands                                             |bemtvi-diff-commands|
+2. Usage                                                   |bemtvi-diff-usage|
+3. Three-way layout                             |bemtvi-diff-three-way-layout|
+4. The Lua API                                       |bemtvi-diff-the-lua-api|
+5. Extending                                           |bemtvi-diff-extending|
+6. Configuration                                   |bemtvi-diff-configuration|
+7. Conflict resolution                       |bemtvi-diff-conflict-resolution|
+8. Performance                                       |bemtvi-diff-performance|
 
 A Meld-style side-by-side (and 3-way) diff viewer for bemtvi. It is a diff
 VIEWER you feed a diff to — not a git tool. The core renders and navigates a
 diff; where the two (or three) sides come from is the caller's business. It
 is built entirely on the native `btv.*` plugin API (ADR 0002): the sides are
-read-only `btv.view` surfaces, the line tints / intra-line spans / alignment are
-extmarks, and the panes stay locked together over the editor's scrollbind
+read-only `btv.view` surfaces, the line tints / intra-line spans / alignment
+are extmarks, and the panes stay locked together over the editor's scrollbind
 seam (`WinScrolled` + `btv.win.set_topline` / `set_leftcol` / `set_cursor`).
 
 >
@@ -39,7 +39,7 @@ source is better expressed in Lua than as a pile of command flags.
 
 
 ==============================================================================
-1. Commands                                              *bemtvi-diff-commands*
+1. Commands                                             *bemtvi-diff-commands*
 
 >
     :DiffGit       Diff the current file's working tree vs git HEAD.
@@ -63,7 +63,7 @@ clean file just notifies.
 
 
 ==============================================================================
-2. Usage                                                    *bemtvi-diff-usage*
+2. Usage                                                   *bemtvi-diff-usage*
 
 The panes scroll and move their cursor in lockstep (Meld-style scrollbind), and
 a changed line shows its edited characters tinted (`DiffText`). The default
@@ -92,7 +92,7 @@ on a `:DiffConflict` diff — see Conflict resolution.
 
 
 ==============================================================================
-3. Three-way layout                              *bemtvi-diff-three-way-layout*
+3. Three-way layout                             *bemtvi-diff-three-way-layout*
 
 A 3-pane diff is center-anchored: the MIDDLE pane is the common base, and the
 two outer panes are aligned against it. A base line and each side's version
@@ -106,7 +106,7 @@ the base. `:DiffConflict` builds exactly such a spec from a diff3 conflict.
 
 
 ==============================================================================
-4. The Lua API                                        *bemtvi-diff-the-lua-api*
+4. The Lua API                                       *bemtvi-diff-the-lua-api*
 
 - `require("bemtvi-diff").open({spec})` — THE generic entry point ("send a diff for preview"). Any
     plugin (git, LSP rename, formatter, …) builds a `{spec}` and calls this. Validates the spec (fails
@@ -155,7 +155,7 @@ In a 3-pane spec the middle pane is the base (see Three-way layout).
 
 
 ==============================================================================
-5. Extending                                            *bemtvi-diff-extending*
+5. Extending                                           *bemtvi-diff-extending*
 
 Because `open()` takes any spec, a one-screen plugin can preview a diff. A
 formatter preview — this buffer vs its formatted output. Running the
@@ -197,7 +197,7 @@ The bundled git and conflict support are themselves just clients of `open()`
 
 
 ==============================================================================
-6. Configuration                                    *bemtvi-diff-configuration*
+6. Configuration                                   *bemtvi-diff-configuration*
 
 `require("bemtvi-diff").setup({opts})` merges `{opts}` over the defaults
 (shown):
@@ -257,7 +257,7 @@ or `""` leaves the row blank. Both ride core extmark decorations (`sign_text` /
 
 
 ==============================================================================
-7. Conflict resolution                        *bemtvi-diff-conflict-resolution*
+7. Conflict resolution                       *bemtvi-diff-conflict-resolution*
 
 `:DiffConflict` opens the WHOLE file as a 3-way (or 2-way) diff with every
 conflict shown in context — the reconstructed ours/base/theirs sides differ
@@ -298,7 +298,7 @@ Picks are per-conflict and last only for the current diff session.
 
 
 ==============================================================================
-8. Performance                                        *bemtvi-diff-performance*
+8. Performance                                       *bemtvi-diff-performance*
 
 The editor must never freeze on a diff, so both LCS passes — the line diff
 and the per-line character diff behind `inline` — are bounded the same way:
