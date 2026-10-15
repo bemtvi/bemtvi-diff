@@ -168,14 +168,15 @@ end
 -- the per-window options below — `nowrap`, and especially `noscrollanim`, which the core
 -- defaults *on* — must reach a real window to take effect, so the gate waits for both.
 local function finish(session, api)
-  btv.wait_for(function()
-    for _, p in ipairs(session.panes) do
-      if not p.view:bufnr() or not p.view:winid() then
-        return false
+  btv
+    .wait_for(function()
+      for _, p in ipairs(session.panes) do
+        if not p.view:bufnr() or not p.view:winid() then
+          return false
+        end
       end
-    end
-    return true
-  end, { tries = 200, interval = 5, message = "bemtvi-diff: panes never mounted" })
+      return true
+    end, { tries = 200, interval = 5, message = "bemtvi-diff: panes never mounted" })
     :next(function()
       for _, p in ipairs(session.panes) do
         p.view:set_decor(session.ns, pane_marks(p.proj, session.config))

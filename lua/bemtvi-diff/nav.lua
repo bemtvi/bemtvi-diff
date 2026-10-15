@@ -251,8 +251,7 @@ function M.pick_lines(session)
   session:render_picks()
 
   if added == 0 then
-    local why = skipped > 0 and "those lines aren't part of the conflict"
-      or "no lines to pick here"
+    local why = skipped > 0 and "those lines aren't part of the conflict" or "no lines to pick here"
     btv.notify("bemtvi-diff: " .. why .. " — pick within the highlighted block", 4)
     return
   end

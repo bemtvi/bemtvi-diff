@@ -165,7 +165,9 @@ btv.test.describe("bemtvi-diff conflict resolve", function()
       return (m:match("aren't part of the conflict") and m) or nil
     end, { tries = 200, interval = 10, message = "no out-of-conflict notice appeared" })
     btv.test.expect(msg:match("aren't part of the conflict") ~= nil).to_be(true)
-    btv.test.expect(s.resolve.regions[1].picks == nil or #s.resolve.regions[1].picks == 0).to_be(true)
+    btv.test
+      .expect(s.resolve.regions[1].picks == nil or #s.resolve.regions[1].picks == 0)
+      .to_be(true)
   end)
 
   btv.test.it("apply_picked with nothing staged notifies and writes nothing", function(t)
