@@ -267,17 +267,17 @@ end
 -- lists: a row belongs to the region when some pane's projected line falls inside that
 -- side's span. The union's min/max over every side is the region's `{ first, last }` row
 -- range (regions are disjoint and ordered, so the ranges don't overlap). Only a conflict
--- spec carries `resolve`; a plain diff is a no-op here.
+-- spec carries `resolve` (passed in as `res`); a plain diff is a no-op here.
 --
 -- Linear, not quadratic: rather than re-scanning every alignment row once per region
 -- (regions × panes × rows — a heavily-conflicted file times a long file), each side builds
 -- a reconstructed-line → region lookup ONCE (the regions are disjoint, so a line has at
 -- most one owner) and then walks its rows a single time.
-local function attach_region_rows(resolve, projs)
-  if not (resolve and resolve.regions) then
+local function attach_region_rows(res, projs)
+  if not (res and res.regions) then
     return
   end
-  local regions = resolve.regions
+  local regions = res.regions
   -- Which projection (by pane index) carries which reconstructed side. A 3-pane diff is
   -- ours | base | theirs; a 2-pane (plain merge) is ours | theirs.
   local roles = #projs == 3
