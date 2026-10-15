@@ -215,17 +215,11 @@ function M.pick_lines(session)
   local pane = focused_pane(session)
   -- The selected alignment-row range. The base is the focused pane's cursor row (the
   -- editor-agnostic `view:line()`, the same accessor the rest of nav uses). In visual mode
-  -- we widen to the selection: `line("v")` is the other end of the selection (and equals
-  -- the cursor row when not visual). It's guarded so an absent `line("v")` degrades to
-  -- picking the current row rather than erroring. NOTE: `btv.line` does not model `"v"`
-  -- yet (it raises; the editor exposes no visual-anchor read to Lua), so today a visual
-  -- selection stages only the cursor row.
+  -- we widen to the selection: `line("v")` is the selection's other end, and the cursor
+  -- row outside visual mode, so normal mode stages just the cursor's row.
   local cur = session:cursor_row()
-  local from, to = cur, cur
-  local ok, other = pcall(btv.line, "v")
-  if ok and type(other) == "number" and other > 0 then
-    from, to = math.min(cur, other), math.max(cur, other)
-  end
+  local other = btv.line("v")
+  local from, to = math.min(cur, other), math.max(cur, other)
   -- Drop back to normal mode so the next pick (often from another pane) starts clean.
   local _, mode = pcall(btv.mode_str)
   if type(mode) == "string" and mode:match("^[vV\22]") then

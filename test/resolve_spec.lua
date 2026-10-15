@@ -163,6 +163,41 @@ btv.test.describe("bemtvi-diff conflict resolve", function()
     btv.test.expect(table.concat(lines, "|")).to_be("top|their change|our change|bot")
   end)
 
+  btv.test.it("a visual Vj then cp stages both selected lines", function(t)
+    local path = btv.test.tempdir() .. "/two.txt"
+    local content = {
+      "top",
+      "<<<<<<< HEAD",
+      "ours one",
+      "ours two",
+      "=======",
+      "theirs",
+      ">>>>>>> branch",
+      "bot",
+    }
+    btv.await(btv.fs.write(path, table.concat(content, "\n") .. "\n"))
+    t:cmd("edit " .. path)
+    diff.conflict()
+    local s = await_ready()
+    local region = s.resolve.regions[1]
+    local row = region.rows.first
+    s.panes[1].view:set_cursor(row)
+    s.panes[1].view:focus()
+    btv.await(btv.wait_for(function()
+      return btv.win.current() == s.panes[1].view:winid() and s:cursor_row() == row
+    end, { tries = 100, interval = 5, message = "pane never focused at the conflict row" }))
+    -- The keys the docs promise: a linewise selection over both lines, then `cp`.
+    t:feed("Vjcp")
+    t:wait_for(function()
+      return region.picks and #region.picks > 0
+    end, { tries = 200, interval = 5, message = "cp staged nothing" })
+    local text = {}
+    for _, p in ipairs(region.picks) do
+      text[#text + 1] = p.text
+    end
+    btv.test.expect(table.concat(text, "|")).to_be("ours one|ours two")
+  end)
+
   btv.test.it("pick_lines refuses lines outside the conflict (shared context)", function(t)
     open_conflict(t)
     diff.conflict()
