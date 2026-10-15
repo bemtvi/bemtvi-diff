@@ -84,6 +84,33 @@ btv.test.describe("bemtvi-diff git", function()
     btv.test.expect(table.concat(again.panes[1].lines, "|")).to_be("one|two|three")
   end)
 
+  btv.test.it("git_head diffs the current file against HEAD, keeping its filetype", function(t)
+    local dir = btv.test.tempdir()
+    git(dir, "init", "-q")
+    git(dir, "config", "user.email", "t@example.com")
+    git(dir, "config", "user.name", "Test")
+    btv.await(btv.fs.write(dir .. "/m.lua", "local a = 1\n"))
+    git(dir, "add", "m.lua")
+    git(dir, "commit", "-q", "-m", "init")
+    edit(t, dir .. "/m.lua")
+    local buf = t:buf()
+    t:wait_for(function()
+      return btv.bo[buf].filetype == "lua"
+    end, { tries = 100, interval = 5, message = "m.lua never got the lua filetype" })
+
+    -- The command path: the current buffer's absolute name and number, and git run in
+    -- the file's own directory, all read off the editor rather than passed in.
+    diff.git_head()
+    local s = t:wait_for(function()
+      local cur = diff.session()
+      return cur and cur._ready and cur
+    end, { tries = 300, interval = 10, message = "git_head never opened a diff" })
+    btv.test.expect(s.spec.panes[1].label).to_be("HEAD")
+    btv.test.expect(table.concat(s.spec.panes[1].lines, "|")).to_be("local a = 1")
+    btv.test.expect(s.spec.panes[1].filetype).to_be("lua")
+    btv.test.expect(s.spec.panes[2].buf).to_be(buf)
+  end)
+
   btv.test.it("a file outside any git repo reports 'not a git repository'", function(t)
     -- The editor cwd is this plugin's repo; the file is in /tmp. The OLD code ran git in
     -- the editor cwd and found THIS repo (then failed on `git show`); running it in the

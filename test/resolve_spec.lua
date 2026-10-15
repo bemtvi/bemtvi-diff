@@ -85,6 +85,21 @@ btv.test.describe("bemtvi-diff conflict resolve", function()
       .to_be("top|our EDITED change|bot")
   end)
 
+  btv.test.it("stamps the conflicted buffer's filetype on every pane", function(t)
+    local path = btv.test.tempdir() .. "/merge.lua"
+    btv.await(btv.fs.write(path, table.concat(CONFLICT, "\n") .. "\n"))
+    t:cmd("edit " .. path)
+    local bufnr = t:buf()
+    t:wait_for(function()
+      return btv.bo[bufnr].filetype == "lua"
+    end, { tries = 100, interval = 5, message = "merge.lua never got the lua filetype" })
+    diff.conflict()
+    local s = await_ready()
+    for _, pane in ipairs(s.spec.panes) do
+      btv.test.expect(pane.filetype).to_be("lua")
+    end
+  end)
+
   btv.test.it("choose_ours replaces the marker block with our side", function(t)
     local _, bufnr = open_conflict(t)
     diff.conflict()

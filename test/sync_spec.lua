@@ -54,7 +54,7 @@ btv.test.describe("bemtvi-diff scroll/cursor sync", function()
     -- Only the focused pane animates a scroll; mirroring moves the others with a crisp
     -- jump, so the panes must not animate or they'd visibly desync mid-slide.
     for _, p in ipairs(s.panes) do
-      btv.test.expect(vim.wo[p.view:winid()].scrollanim).to_be(false)
+      btv.test.expect(btv.wo[p.view:winid()].scrollanim).to_be(false)
     end
   end)
 

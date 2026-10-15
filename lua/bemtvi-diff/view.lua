@@ -38,7 +38,7 @@ local SIDES = { "a", "b", "c" }
 -- Set one window-local option. Split out so each option can be pcall'd on its own (see
 -- `finish`) instead of one wrapping pcall skipping every option after a failure.
 local function set_wo(win, name, value)
-  vim.wo[win][name] = value
+  btv.wo[win][name] = value
 end
 
 -- The split direction the extra panes mount with, from `config.layout`: "horizontal"

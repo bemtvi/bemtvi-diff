@@ -153,7 +153,7 @@ btv.test.describe("bemtvi-diff render", function()
     -- Quit one pane the way the user does. on_close fires → the session closes ALL
     -- three panes, leaving its dedicated tab and returning to the original.
     s.panes[2].view:focus()
-    vim.cmd("q")
+    btv.cmd("q")
     btv.await(btv.wait_for(function()
       return diff.session() == nil
     end, { tries = 200, interval = 5, message = "closing a pane did not tear the diff down" }))

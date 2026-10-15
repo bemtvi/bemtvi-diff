@@ -23,14 +23,14 @@
 -- UPPERCASED copy of itself: that's the whole extension surface a git/LSP/formatter
 -- plugin would use to "send a diff for preview".
 
-vim.g.mapleader = " "
+btv.g.mapleader = " "
 
 -- Load the plugin straight from this repo (a local-dev spec: `dir` is never cloned).
 -- A real config would instead use `{ "bemtvi/bemtvi-diff", config = ... }`.
 btv.plugins({
   {
     name = "bemtvi-diff",
-    dir = vim.fn.expand("<sfile>:p:h:h"), -- the repo root (this file's grandparent dir)
+    dir = btv.expand("<sfile>:p:h:h"), -- the repo root (this file's grandparent dir)
     config = function()
       require("bemtvi-diff").setup({
         sync_scroll = true,
@@ -43,9 +43,9 @@ btv.plugins({
 })
 
 -- Extensibility demo (Lua API only — no command needed): feed the viewer any diff.
-vim.keymap.set("n", "<leader>du", function()
+btv.keymap.set("n", "<leader>du", function()
   local diff = require("bemtvi-diff")
-  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  local lines = btv.buf.lines(0, 0, -1, false)
   local upper = {}
   for i, l in ipairs(lines) do
     upper[i] = l:upper()
@@ -62,7 +62,7 @@ end, { desc = "bemtvi-diff: diff this buffer against an uppercased copy" })
 -- 3-way demo (Lua API only): three synthetic sides. In a 3-pane spec the MIDDLE pane is
 -- the common base; the outer two are center-anchored against it — exactly what
 -- `:DiffConflict` builds from a diff3 conflict.
-vim.keymap.set("n", "<leader>d3", function()
+btv.keymap.set("n", "<leader>d3", function()
   require("bemtvi-diff").open({
     title = "3-way demo",
     panes = {

@@ -68,7 +68,7 @@ function M.head_spec(ctx)
       error(("no HEAD version of %s"):format(rel), 0)
     end
 
-    local ft = vim.bo[ctx.bufnr] and vim.bo[ctx.bufnr].filetype or nil
+    local ft = btv.bo[ctx.bufnr] and btv.bo[ctx.bufnr].filetype or nil
     return {
       title = ("git HEAD — %s"):format(rel),
       -- `refresh` (`R`) re-runs THIS, so it re-reads the blob at HEAD rather than

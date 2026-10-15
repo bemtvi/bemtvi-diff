@@ -130,11 +130,11 @@ end
 -- the repo the file actually lives in (you may be editing a file outside `:pwd`).
 -- `expand("%:p")` is "" for a buffer with no file, which head_spec rejects loudly.
 function M.git_head()
-  local file = vim.fn.expand("%:p")
+  local file = btv.expand("%:p")
   local ctx = {
     file = file,
-    bufnr = vim.api.nvim_get_current_buf(),
-    cwd = (file ~= "" and vim.fn.fnamemodify(file, ":h")) or vim.fn.getcwd(),
+    bufnr = btv.buf.current(),
+    cwd = (file ~= "" and btv.fname.modify(file, ":h")) or btv.cwd(),
   }
   run(function()
     M.open(btv.await(require("bemtvi-diff.git").head_spec(ctx)))
@@ -153,7 +153,7 @@ end
 local function conflict_spec(buf)
   -- Stamp the conflicted buffer's own filetype on every reconstructed pane so each side
   -- gets the same syntax highlighting as the original file (mirrors git.head_spec).
-  local ft = vim.bo[buf] and vim.bo[buf].filetype or nil
+  local ft = btv.bo[buf] and btv.bo[buf].filetype or nil
   local name = (btv.buf.name(buf) or ""):match("[^/]+$")
   local spec, reason = require("bemtvi-diff.conflict").spec(btv.buf.lines(buf, 0, -1), name, ft)
   if not spec then
@@ -180,7 +180,7 @@ end
 -- A malformed / unterminated marker makes it raise; that is caught and surfaced as a
 -- clean notification.
 function M.conflict()
-  local buf = vim.api.nvim_get_current_buf()
+  local buf = btv.buf.current()
   if not btv.buf.search(buf, "^<<<<<<<", { engine = "vim" }) then
     btv.notify("bemtvi-diff: no conflict markers found")
     return
