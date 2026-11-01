@@ -30,7 +30,7 @@ btv.test.describe("bemtvi-diff render", function()
 
     btv.test.expect(#s.panes).to_be(2)
     -- Both views exist and are shown in a window.
-    btv.test.expect(s.panes[1].view:bufnr() ~= nil).to_be(true)
+    btv.test.expect(type(s.panes[1].view:bufnr())).to_be("number")
     btv.test.expect(s.panes[2].view:winid() ~= nil).to_be(true)
 
     -- The alignment: same / change(old→new) / add(extra) / same → 4 rows. Each pane
