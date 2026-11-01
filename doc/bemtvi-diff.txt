@@ -5,6 +5,7 @@ Table of Contents                              *bemtvi-diff-table-of-contents*
 
 1. Commands                                             |bemtvi-diff-commands|
 2. Usage                                                   |bemtvi-diff-usage|
+  - Modeless editing                      |bemtvi-diff-usage-modeless-editing|
 3. Three-way layout                             |bemtvi-diff-three-way-layout|
 4. The Lua API                                       |bemtvi-diff-the-lua-api|
 5. Extending                                           |bemtvi-diff-extending|
@@ -89,6 +90,15 @@ buffer-local maps on every pane (all rebindable, see Configuration):
 Hunk motions wrap around (past the last hunk → the first, and vice versa).
 The conflict maps (`co` / `ct` / `cb` / `cp` / `ca` / `cx`) only do something
 on a `:DiffConflict` diff — see Conflict resolution.
+
+
+MODELESS EDITING                          *bemtvi-diff-usage-modeless-editing*
+
+The same keys work in a modeless session (`:set modeless`, the GUI and web
+editing model with no Normal mode). The panes rest in Insert there and refuse
+typing (`E21`), and every pane key binds in the `modeless` keymap layer as well
+as in Normal mode. A selection is made with Shift and the arrows (or the mouse)
+instead of `V`, and `cp` stages its lines the same way.
 
 
 ==============================================================================
@@ -230,8 +240,9 @@ binding without redeclaring all). An action is a built-in name (`next_hunk`,
 `prev_hunk`, `first_hunk`, `last_hunk`, `choose_ours`, `choose_theirs`,
 `choose_both`, `pick_lines`, `apply_picked`, `clear_picked`, `refresh`,
 `close`), a function `fn(session, api)`, or `false` to drop a key. An unknown
-name fails loud. `pick_lines` also binds in visual mode (the selection is its
-input); the other built-ins are normal-mode.
+name fails loud. Every key binds in Normal mode and in the `modeless` keymap
+layer (see Modeless editing), a custom function included; `pick_lines` also
+binds in visual mode (the selection is its input).
 
 Highlights use the canonical `DiffAdd` / `DiffDelete` / `DiffChange` /
 `DiffText` groups, so a ported colorscheme themes the viewer unmodified; only a

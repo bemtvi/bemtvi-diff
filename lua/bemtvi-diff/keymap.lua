@@ -31,8 +31,11 @@ function M.install(session, api)
           if fn then
             -- Most actions are normal-mode; the ones in nav.VISUAL_ACTIONS (pick_lines)
             -- also bind in visual mode, since the selection IS their input. A custom
-            -- function action stays normal-mode (we can't know its mode).
-            local modes = { "n" }
+            -- function action stays normal-mode (we can't know its mode). Every action
+            -- also binds in the `modeless` keymap layer: a modeless session (GUI and web)
+            -- has no Normal or Visual mode, and the read-only panes take their keys only
+            -- through that layer, a Shift-arrow selection (Select mode) included.
+            local modes = { "n", "modeless" }
             if type(action) == "string" and nav.VISUAL_ACTIONS[action] then
               modes[#modes + 1] = "x"
             end

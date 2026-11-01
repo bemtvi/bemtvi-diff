@@ -220,9 +220,11 @@ function M.pick_lines(session)
   local cur = session:cursor_row()
   local other = btv.line("v")
   local from, to = math.min(cur, other), math.max(cur, other)
-  -- Drop back to normal mode so the next pick (often from another pane) starts clean.
+  -- Drop the selection so the next pick (often from another pane) starts clean: back to
+  -- normal mode from Visual, and in a modeless session out of Select (`s`/`S`), where the
+  -- session then settles back into its resting Insert.
   local _, mode = pcall(btv.mode_str)
-  if type(mode) == "string" and mode:match("^[vV\22]") then
+  if type(mode) == "string" and mode:match("^[vV\22sS\19]") then
     pcall(btv.cmd, "normal! \27")
   end
 

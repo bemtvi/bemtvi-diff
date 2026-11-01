@@ -76,6 +76,13 @@ Hunk motions wrap around (past the last hunk → the first, and vice versa). The
 (`co` / `ct` / `cb` / `cp` / `ca` / `cx`) only do something on a `:DiffConflict` diff — see
 Conflict resolution.
 
+## Modeless editing
+
+The same keys work in a modeless session (`:set modeless`, the GUI and web editing model with no
+Normal mode). The panes rest in Insert there and refuse typing (`E21`), and every pane key binds
+in the `modeless` keymap layer as well as in Normal mode. A selection is made with Shift and the
+arrows (or the mouse) instead of `V`, and `cp` stages its lines the same way.
+
 # Three-way layout
 
 A 3-pane diff is center-anchored: the MIDDLE pane is the common base, and the two outer panes are
@@ -198,8 +205,8 @@ each read best in columns.
 redeclaring all). An action is a built-in name (`next_hunk`, `prev_hunk`, `first_hunk`, `last_hunk`,
 `choose_ours`, `choose_theirs`, `choose_both`, `pick_lines`, `apply_picked`, `clear_picked`,
 `refresh`, `close`), a function `fn(session, api)`, or `false` to drop a key. An unknown name fails
-loud. `pick_lines` also binds in visual mode (the selection is its input); the other built-ins are
-normal-mode.
+loud. Every key binds in Normal mode and in the `modeless` keymap layer (see Modeless editing),
+a custom function included; `pick_lines` also binds in visual mode (the selection is its input).
 
 Highlights use the canonical `DiffAdd` / `DiffDelete` / `DiffChange` / `DiffText` groups, so a
 ported colorscheme themes the viewer unmodified; only a fallback is installed when a group is

@@ -198,6 +198,57 @@ btv.test.describe("bemtvi-diff conflict resolve", function()
     btv.test.expect(table.concat(text, "|")).to_be("ours one|ours two")
   end)
 
+  -- A modeless session (`'modeless'`, GUI and web) has no Normal or Visual mode: a pane
+  -- rests in Insert, a Shift-arrow selection is Select mode, and the pane's keys arrive
+  -- through the `modeless` keymap layer. The same `cp` stages the selected lines, and
+  -- `q` closes the diff.
+  btv.test.it("in a modeless session, a Shift selection then cp stages both lines", function(t)
+    btv.o.modeless = true
+    local path = btv.test.tempdir() .. "/two-modeless.txt"
+    local content = {
+      "top",
+      "<<<<<<< HEAD",
+      "ours one",
+      "ours two",
+      "=======",
+      "theirs",
+      ">>>>>>> branch",
+      "bot",
+    }
+    btv.await(btv.fs.write(path, table.concat(content, "\n") .. "\n"))
+    t:cmd("edit " .. path)
+    diff.conflict()
+    local s = await_ready()
+    local region = s.resolve.regions[1]
+    local row = region.rows.first
+    s.panes[1].view:set_cursor(row)
+    s.panes[1].view:focus()
+    btv.await(btv.wait_for(function()
+      return btv.win.current() == s.panes[1].view:winid() and s:cursor_row() == row
+    end, { tries = 100, interval = 5, message = "pane never focused at the conflict row" }))
+    btv.test.expect(t:mode()).to_be("i")
+    -- From the start of the first line, Shift-Down then Shift-End selects both lines.
+    t:feed("<Home><S-Down><S-End>")
+    btv.test.expect(t:mode()).to_be("s")
+    t:feed("cp")
+    t:wait_for(function()
+      return region.picks and #region.picks > 0
+    end, { tries = 200, interval = 5, message = "cp staged nothing" })
+    local text = {}
+    for _, p in ipairs(region.picks) do
+      text[#text + 1] = p.text
+    end
+    btv.test.expect(table.concat(text, "|")).to_be("ours one|ours two")
+    -- The pick dropped the selection, back to the resting Insert.
+    t:wait_for(function()
+      return t:mode() == "i"
+    end, { tries = 100, interval = 5, message = "cp left the selection up" })
+    t:feed("q")
+    t:wait_for(function()
+      return diff.session() == nil
+    end, { tries = 200, interval = 5, message = "q never closed the diff" })
+  end)
+
   btv.test.it("pick_lines refuses lines outside the conflict (shared context)", function(t)
     open_conflict(t)
     diff.conflict()
