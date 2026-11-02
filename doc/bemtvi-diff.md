@@ -211,7 +211,10 @@ a custom function included; `pick_lines` also binds in visual mode (the selectio
 Highlights use the canonical `DiffAdd` / `DiffDelete` / `DiffChange` / `DiffText` groups, so a
 ported colorscheme themes the viewer unmodified; only a fallback is installed when a group is
 undefined. Plugin-private extras (the filler rule, the sign glyphs, the picked-line tint) live
-under the `BtvDiff*` namespace.
+under the `BtvDiff*` namespace. The fallbacks come from the active theme: the signs take its
+accents (`btv.hl.palette()`), and each line tint is an accent faded into its background
+(`btv.hl.blend`), so they match bemtvi's own theme, a ported one, or a light flavour, and are
+re-derived on every `:colorscheme`. A `highlights` override always wins.
 
 The three line groups are painted as the editor's full-width line background — the whole changed
 row is tinted to the window edge, vim's diff look, and an added or changed line that happens to be

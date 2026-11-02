@@ -251,10 +251,22 @@ function M.session()
 end
 
 -- ensure_highlights() — apply the Diff* palette once (and after a setup() reconfigure).
+-- The first apply also hooks `ColorScheme`: a theme load clears the groups (`:hi
+-- clear`) and changes the palette they derive from, so they are re-derived each time.
+local colorscheme_hook = nil
 function M.ensure_highlights()
   if not hl_applied then
     highlights.apply(M.config.highlights)
     hl_applied = true
+  end
+  if not colorscheme_hook then
+    colorscheme_hook = btv.on(
+      "ColorScheme",
+      { desc = "bemtvi-diff: re-derive the diff colours" },
+      function()
+        highlights.apply(M.config.highlights)
+      end
+    )
   end
 end
 
